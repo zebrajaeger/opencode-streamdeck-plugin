@@ -36,5 +36,6 @@ function statusImage(status: GlobalStatusValue): string {
 		ERROR: "#CF3D3D",
 	};
 	const color = colors[status];
-	return `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144"><rect width="144" height="144" rx="18" fill="#101216"/><circle cx="72" cy="46" r="22" fill="${color}"/><path d="M43 91h58" stroke="${color}" stroke-width="12" stroke-linecap="round"/></svg>`;
+	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144"><rect width="144" height="144" rx="18" fill="#101216"/><circle cx="72" cy="46" r="22" fill="${color}"/><path d="M43 91h58" stroke="${color}" stroke-width="12" stroke-linecap="round"/></svg>`;
+	return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
