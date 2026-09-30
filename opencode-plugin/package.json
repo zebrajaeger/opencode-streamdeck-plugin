@@ -4,6 +4,7 @@
 	"type": "module",
 	"main": "./index.mjs",
 	"dependencies": {
-		"@opencode/plugin": "2.0.18"
+		"@opencode/plugin": "2.0.18",
+		"pino": "^10.3.1"
 	}
 }

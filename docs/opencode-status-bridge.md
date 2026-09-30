@@ -30,4 +30,26 @@ Add the absolute path to this repository's `opencode-plugin` directory to the gl
 
 Start a new OpenCode instance after saving the configuration. `opencode debug config` should show the configured directory, and the plugin will connect to the Stream Deck endpoint automatically. The Stream Deck plugin exposes `ws://127.0.0.1:20666` only, and the bridge reconnects with capped exponential backoff when that endpoint is unavailable.
 
+## Logging
+
+The bridge writes structured JSON logs with [Pino](https://getpino.io/) to its own file, avoiding interference with OpenCode's internally managed log:
+
+```text
+~/.local/share/opencode/log/streamdeck-status-bridge.log
+```
+
+On this Windows installation, that resolves to:
+
+```text
+C:\Users\Lars.Brandt\.local\share\opencode\log\streamdeck-status-bridge.log
+```
+
+Follow the bridge log in PowerShell while reproducing an issue:
+
+```powershell
+Get-Content "$HOME\.local\share\opencode\log\streamdeck-status-bridge.log" -Wait
+```
+
+It records bridge lifecycle events, incoming OpenCode event types, outbound bridge message types, and errors that were previously intentionally swallowed to keep status reporting non-disruptive.
+
 Release 1 is display-only. It does not approve or deny permissions, submit prompts, abort sessions, or focus an OpenCode session. The protocol reserves those command names for a future authenticated release; no shared secret or command handling exists yet.
