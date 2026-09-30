@@ -1,0 +1,9 @@
+{
+	"name": "opencode-streamdeck-status-bridge",
+	"private": true,
+	"type": "module",
+	"main": "./index.mjs",
+	"dependencies": {
+		"@opencode/plugin": "2.0.18"
+	}
+}

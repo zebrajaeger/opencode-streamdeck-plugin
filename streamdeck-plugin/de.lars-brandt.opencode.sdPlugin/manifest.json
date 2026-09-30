@@ -4,17 +4,16 @@
 	"Author": "Lars Brandt",
 	"Actions": [
 		{
-			"Name": "Counter",
-			"UUID": "de.lars-brandt.opencode.increment",
-			"Icon": "imgs/actions/counter/icon",
-			"Tooltip": "Displays a count, which increments by one on press.",
-			"PropertyInspectorPath": "ui/increment-counter.html",
+			"Name": "OpenCode Status",
+			"UUID": "de.lars-brandt.opencode.status",
+			"Icon": "imgs/plugin/category-icon",
+			"Tooltip": "Displays the global status of connected local OpenCode instances.",
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/counter/key",
+					"Image": "imgs/plugin/category-icon",
 					"TitleAlignment": "middle"
 				}
 			]
@@ -23,7 +22,7 @@
 	"Category": "opencode",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "opencode plugin",
+	"Description": "Displays the global status of local OpenCode instances.",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 3,
 	"Software": {
