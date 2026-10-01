@@ -14,6 +14,20 @@ test("accepts valid protocol frames", () => {
 	assert.equal(frame?.type, "snapshot");
 });
 
+test("accepts hello frames with and without a directory", () => {
+	const directoryHello = parseBridgeFrame({
+		version: 1,
+		type: "hello",
+		instanceID: "instance",
+		directory: "C:\\work\\project",
+	});
+	assert.equal(directoryHello?.directory, "C:\\work\\project");
+
+	const legacyHello = parseBridgeFrame({ version: 1, type: "hello", instanceID: "instance" });
+	assert.equal(legacyHello?.type, "hello");
+	assert.equal(parseBridgeFrame({ version: 1, type: "hello", instanceID: "instance", directory: 1 }), undefined);
+});
+
 test("rejects invalid and unknown frames without throwing", () => {
 	assert.equal(parseBridgeFrame("not json"), undefined);
 	assert.equal(parseBridgeFrame({ version: 1, type: "unexpected", instanceID: "instance" }), undefined);

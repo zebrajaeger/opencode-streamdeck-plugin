@@ -31,14 +31,15 @@ logger.info({ logFile: LOG_FILE }, "Stream Deck status bridge module loaded");
 export default Plugin.define({
 	id: "de.lars-brandt.opencode.streamdeck-status",
 	async setup(context) {
-		logger.debug("Setting up Stream Deck status bridge");
 		const bridge = new OpenCodeBridge(context);
+		logger.info({ instanceID: bridge.instanceID, directory: bridge.directory }, "Setting up Stream Deck status bridge");
 		const events = new AbortController();
 
 		await bridge.initialize();
 		void bridge.consumeEvents(context.event.subscribe({ signal: events.signal }));
 
 		return () => {
+			logger.info({ instanceID: bridge.instanceID, directory: bridge.directory }, "Disposing Stream Deck status bridge setup");
 			events.abort();
 			bridge.dispose();
 		};
@@ -51,6 +52,7 @@ class OpenCodeBridge {
 		logger.debug("Creating Stream Deck status bridge");
 		this.context = context;
 		this.instanceID = randomUUID();
+		this.directory = context.location.directory;
 		this.sessions = new Map();
 		this.permissions = new Map();
 		this.socket = undefined;
@@ -84,33 +86,33 @@ class OpenCodeBridge {
 	}
 
 	connect() {
-		logger.debug("Connecting to Stream Deck bridge");
+		logger.debug({ instanceID: this.instanceID, directory: this.directory }, "Connecting to Stream Deck bridge");
 		if (this.disposed || this.socket) return;
 
 		try {
 			const socket = createWebSocket(BRIDGE_URL);
 			this.socket = socket;
 			socket.addEventListener("open", () => {
-				logger.info({ url: BRIDGE_URL }, "Connected to Stream Deck bridge");
+				logger.info({ instanceID: this.instanceID, directory: this.directory, url: BRIDGE_URL }, "Connected to Stream Deck bridge");
 				this.reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
 				this.send({
 					type: "hello",
 					projectID: this.context.location.project.id,
-					directory: this.context.location.directory,
+					directory: this.directory,
 				});
 				this.sendSnapshot();
 			});
 			socket.addEventListener("close", () => {
-				logger.warn("Stream Deck bridge connection closed");
+				logger.warn({ instanceID: this.instanceID, directory: this.directory }, "Stream Deck bridge connection closed");
 				if (this.socket === socket) this.socket = undefined;
 				this.scheduleReconnect();
 			});
 			socket.addEventListener("error", () => {
-				logger.warn("Stream Deck bridge connection error");
+				logger.warn({ instanceID: this.instanceID, directory: this.directory }, "Stream Deck bridge connection error");
 				socket.close();
 			});
 		} catch (error) {
-			logger.warn({ err: error }, "Unable to connect to Stream Deck bridge");
+				logger.warn({ err: error, instanceID: this.instanceID, directory: this.directory }, "Unable to connect to Stream Deck bridge");
 			this.socket = undefined;
 			this.scheduleReconnect();
 		}
@@ -132,44 +134,44 @@ class OpenCodeBridge {
 		//logger.debug({ eventType: event.type }, "Handling OpenCode event");
 		switch (event.type) {
 			case "session.execution.started":
-				logger.debug({ sessionID: event.data.sessionID }, "Marking session as busy");
+				logger.debug("Marking session as busy");
 				this.sessions.set(event.data.sessionID, BridgeStatus.BUSY);
 				this.send({ type: "session.status", sessionID: event.data.sessionID, status: BridgeStatus.BUSY });
 				break;
 			case "session.execution.succeeded":
-				logger.debug({ sessionID: event.data.sessionID }, "Marking completed session as idle");
+				logger.debug("Marking completed session as idle");
 				this.sessions.set(event.data.sessionID, BridgeStatus.READY);
 				this.send({ type: "session.idle", sessionID: event.data.sessionID });
 				break;
 			case "session.execution.interrupted":
-				logger.debug({ sessionID: event.data.sessionID }, "Marking interrupted session as idle");
+				logger.debug("Marking interrupted session as idle");
 				this.sessions.set(event.data.sessionID, BridgeStatus.READY);
 				this.send({ type: "session.idle", sessionID: event.data.sessionID });
 				break;
 			case "session.status": {
 				const { sessionID, status } = event.data;
-				logger.debug({ sessionID, status: status.type }, "Updating session status");
+				logger.debug({ status: status.type }, "Updating session status");
 				this.sessions.set(sessionID, toBridgeStatus(status));
 				this.send({ type: "session.status", sessionID, status: toBridgeStatus(status) });
 				break;
 			}
 			case "session.idle":
-				logger.debug({ sessionID: event.data.sessionID }, "Marking session as idle");
+				logger.debug("Marking session as idle");
 				this.sessions.set(event.data.sessionID, BridgeStatus.READY);
 				this.send({ type: "session.idle", sessionID: event.data.sessionID });
 				break;
 			case "session.execution.failed":
-				logger.warn({ sessionID: event.data.sessionID }, "Session execution failed");
+				logger.warn("Session execution failed");
 				this.sessions.set(event.data.sessionID, BridgeStatus.ERROR);
 				this.send({ type: "session.error", sessionID: event.data.sessionID });
 				break;
 			case "session.created":
-				logger.debug({ sessionID: event.data.sessionID }, "Registering new session");
+				logger.debug("Registering new session");
 				this.sessions.set(event.data.sessionID, BridgeStatus.READY);
 				this.send({ type: "session.idle", sessionID: event.data.sessionID });
 				break;
 			case "session.deleted":
-				logger.debug({ sessionID: event.data.sessionID }, "Removing deleted session");
+				logger.debug("Removing deleted session");
 				this.sessions.delete(event.data.sessionID);
 				for (const [permissionID, permission] of this.permissions) {
 					if (permission.sessionID === event.data.sessionID) this.permissions.delete(permissionID);
@@ -177,18 +179,12 @@ class OpenCodeBridge {
 				this.sendSnapshot();
 				break;
 			case "permission.asked":
-				logger.debug(
-					{ permissionID: event.data.id, sessionID: event.data.sessionID },
-					"Registering permission request",
-				);
+				logger.debug("Registering permission request");
 				this.permissions.set(event.data.id, { sessionID: event.data.sessionID });
 				this.send({ type: "permission.asked", permissionID: event.data.id, sessionID: event.data.sessionID });
 				break;
 			case "permission.replied":
-				logger.debug(
-					{ permissionID: event.data.requestID, sessionID: event.data.sessionID },
-					"Removing answered permission request",
-				);
+				logger.debug("Removing answered permission request");
 				this.permissions.delete(event.data.requestID);
 				this.send({ type: "permission.replied", permissionID: event.data.requestID });
 				break;
@@ -222,7 +218,7 @@ class OpenCodeBridge {
 	}
 
 	dispose() {
-		logger.debug("Disposing Stream Deck status bridge");
+		logger.info({ instanceID: this.instanceID, directory: this.directory }, "Disposing Stream Deck status bridge");
 		this.disposed = true;
 		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		this.socket?.close();

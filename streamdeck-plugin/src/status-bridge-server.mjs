@@ -13,6 +13,7 @@ export class StatusBridgeServer {
 		this.registry = new StatusRegistry();
 		this.sockets = new Map();
 		this.instanceSockets = new Map();
+		this.directorySources = new Map();
 		this.server = new WebSocketServer({ host, port });
 		this.server.on("connection", (socket, request) => this.handleConnection(socket, request.socket.remoteAddress));
 		this.server.on("error", (error) => console.error("OpenCode status bridge error:", error));
@@ -44,30 +45,54 @@ export class StatusBridgeServer {
 		const frame = parseBridgeFrame(payload);
 		if (!frame) return;
 
-		const currentInstanceID = this.sockets.get(socket);
+		const currentSource = this.sockets.get(socket);
 		if (frame.type === "hello") {
-			if (currentInstanceID && currentInstanceID !== frame.instanceID) {
-				this.removeInstanceSocket(currentInstanceID, socket);
-			}
+			if (currentSource) this.retireSource(currentSource);
 
 			const previousSocket = this.instanceSockets.get(frame.instanceID);
-			if (previousSocket && previousSocket !== socket) previousSocket.close(1000, "Replaced by reconnection");
+			if (previousSocket && previousSocket !== socket) {
+				const previousSource = this.sockets.get(previousSocket);
+				if (previousSource) this.retireSource(previousSource);
+				previousSocket.close(1000, "Replaced by reconnection");
+			}
 
-			this.sockets.set(socket, frame.instanceID);
+			const directory = nonEmptyDirectory(frame.directory);
+			const previousDirectorySource = directory && this.directorySources.get(directory);
+			if (previousDirectorySource && previousDirectorySource.socket !== socket) {
+				this.retireSource(previousDirectorySource);
+				logLifecycle("source.replaced", {
+					directory,
+					previousInstanceID: previousDirectorySource.instanceID,
+					instanceID: frame.instanceID,
+				});
+				previousDirectorySource.socket.close(1000, "Replaced by directory source");
+			}
+
+			const source = { instanceID: frame.instanceID, directory, socket };
+			this.sockets.set(socket, source);
 			this.instanceSockets.set(frame.instanceID, socket);
+			if (directory) this.directorySources.set(directory, source);
 			this.registry.connect(frame.instanceID);
+			logLifecycle("source.registered", { instanceID: frame.instanceID, directory });
 			return;
 		}
 
-		if (currentInstanceID !== frame.instanceID) return;
+		if (currentSource?.instanceID !== frame.instanceID) return;
 		this.registry.apply(frame);
 	}
 
 	/** @param {import("ws").WebSocket} socket */
 	handleClose(socket) {
-		const instanceID = this.sockets.get(socket);
-		this.sockets.delete(socket);
-		if (instanceID) this.removeInstanceSocket(instanceID, socket);
+		const source = this.sockets.get(socket);
+		if (source) this.retireSource(source);
+	}
+
+	/** @param {{ instanceID: string, directory: string | undefined, socket: import("ws").WebSocket }} source */
+	retireSource(source) {
+		if (this.sockets.get(source.socket) !== source) return;
+		this.sockets.delete(source.socket);
+		this.removeInstanceSocket(source.instanceID, source.socket);
+		this.removeDirectorySource(source.directory, source);
 	}
 
 	/** @param {string} instanceID @param {import("ws").WebSocket} socket */
@@ -76,6 +101,22 @@ export class StatusBridgeServer {
 		this.instanceSockets.delete(instanceID);
 		this.registry.disconnect(instanceID);
 	}
+
+	/** @param {string | undefined} directory @param {{ instanceID: string, socket: import("ws").WebSocket }} source */
+	removeDirectorySource(directory, source) {
+		if (!directory || this.directorySources.get(directory) !== source) return;
+		this.directorySources.delete(directory);
+	}
+}
+
+/** @param {unknown} directory */
+function nonEmptyDirectory(directory) {
+	return typeof directory === "string" && directory.length > 0 ? directory : undefined;
+}
+
+/** @param {string} action @param {Record<string, unknown>} details */
+function logLifecycle(action, details) {
+	console.info("OpenCode status bridge lifecycle", { action, ...details });
 }
 
 /** @param {import("ws").RawData} data */
