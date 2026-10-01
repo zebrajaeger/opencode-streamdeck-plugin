@@ -28,7 +28,7 @@ export class StatusRegistry {
 
 	/** @param {string} instanceID */
 	connect(instanceID) {
-		this.instances.set(instanceID, { sessions: new Map(), permissions: new Map() });
+		this.instances.set(instanceID, { sessions: new Map(), permissions: new Map(), questions: new Map() });
 		this.notify();
 	}
 
@@ -46,6 +46,7 @@ export class StatusRegistry {
 			case "snapshot":
 				instance.sessions = new Map(frame.sessions.map(({ sessionID, status }) => [sessionID, status]));
 				instance.permissions = new Map(frame.permissions.map(({ permissionID, sessionID }) => [permissionID, sessionID]));
+				instance.questions = new Map((frame.questions ?? []).map(({ questionID, sessionID }) => [questionID, sessionID]));
 				break;
 			case "session.status":
 				instance.sessions.set(frame.sessionID, frame.status);
@@ -62,6 +63,12 @@ export class StatusRegistry {
 			case "permission.replied":
 				instance.permissions.delete(frame.permissionID);
 				break;
+			case "question.asked":
+				instance.questions.set(frame.questionID, frame.sessionID);
+				break;
+			case "question.resolved":
+				instance.questions.delete(frame.questionID);
+				break;
 		}
 
 		this.notify();
@@ -73,7 +80,7 @@ export class StatusRegistry {
 		let busy = false;
 		let error = false;
 		for (const instance of this.instances.values()) {
-			if (instance.permissions.size > 0) return GlobalStatus.ATTENTION;
+			if (instance.permissions.size > 0 || instance.questions.size > 0) return GlobalStatus.ATTENTION;
 			for (const sessionStatus of instance.sessions.values()) {
 				if (sessionStatus === BridgeStatus.ERROR) error = true;
 				if (sessionStatus === BridgeStatus.BUSY) busy = true;

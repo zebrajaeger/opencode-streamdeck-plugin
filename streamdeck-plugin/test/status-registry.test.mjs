@@ -32,16 +32,47 @@ test("aggregates READY, BUSY, ERROR, and ATTENTION by precedence", () => {
 	assert.equal(registry.status, "ERROR");
 });
 
+test("keeps ATTENTION while permissions and questions coexist, then restores session status", () => {
+	const registry = new StatusRegistry();
+	registry.connect(INSTANCE);
+	registry.apply(frame("session.status", { sessionID: "working", status: BridgeStatus.BUSY }));
+	registry.apply(frame("question.asked", { questionID: "question", sessionID: "working" }));
+	assert.equal(registry.status, "ATTENTION");
+
+	registry.apply(frame("permission.asked", { permissionID: "permission", sessionID: "working" }));
+	registry.apply(frame("question.resolved", { questionID: "question" }));
+	assert.equal(registry.status, "ATTENTION");
+
+	registry.apply(frame("permission.replied", { permissionID: "permission" }));
+	assert.equal(registry.status, "BUSY");
+});
+
+test("a resolved question restores ERROR or READY", () => {
+	const registry = new StatusRegistry();
+	registry.connect(INSTANCE);
+	registry.apply(frame("session.error", { sessionID: "errored" }));
+	registry.apply(frame("question.asked", { questionID: "question", sessionID: "errored" }));
+	assert.equal(registry.status, "ATTENTION");
+	registry.apply(frame("question.resolved", { questionID: "question" }));
+	assert.equal(registry.status, "ERROR");
+
+	registry.apply(frame("snapshot", { sessions: [], permissions: [], questions: [{ questionID: "question", sessionID: "waiting" }] }));
+	assert.equal(registry.status, "ATTENTION");
+	registry.apply(frame("question.resolved", { questionID: "question" }));
+	assert.equal(registry.status, "READY");
+});
+
 test("replaces state with a reconnect snapshot and removes it on disconnect", () => {
 	const registry = new StatusRegistry();
 	registry.connect(INSTANCE);
 	registry.apply(frame("snapshot", {
 		sessions: [{ sessionID: "working", status: BridgeStatus.BUSY }],
 		permissions: [{ permissionID: "pending", sessionID: "working" }],
+		questions: [{ questionID: "question", sessionID: "working" }],
 	}));
 	assert.equal(registry.status, "ATTENTION");
 
-	registry.apply(frame("snapshot", { sessions: [], permissions: [] }));
+	registry.apply(frame("snapshot", { sessions: [], permissions: [], questions: [] }));
 	assert.equal(registry.status, "READY");
 
 	registry.disconnect(INSTANCE);

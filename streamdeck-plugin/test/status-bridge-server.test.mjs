@@ -51,6 +51,35 @@ test("accepts a local WebSocket client on loopback and drops its state at discon
 	await waitForStatus(bridge, "OFFLINE");
 });
 
+test("question frames transition a busy client through ATTENTION and restore its session status", async (t) => {
+	const bridge = new StatusBridgeServer({ port: 0 });
+	await once(bridge.server, "listening");
+	t.after(() => bridge.close());
+
+	const address = bridge.server.address();
+	assert.equal(typeof address, "object");
+	const client = new WebSocket(`ws://127.0.0.1:${address.port}`);
+	await once(client, "open");
+	client.send(frame("hello"));
+	await waitForStatus(bridge, "READY");
+	client.send(frame("session.status", { sessionID: "session", status: "busy" }));
+	await waitForStatus(bridge, "BUSY");
+
+	client.send(frame("question.asked", { questionID: "reply", sessionID: "session" }));
+	await waitForStatus(bridge, "ATTENTION");
+	client.send(frame("question.resolved", { questionID: "reply" }));
+	await waitForStatus(bridge, "BUSY");
+
+	client.send(frame("question.asked", { questionID: "reject", sessionID: "session" }));
+	await waitForStatus(bridge, "ATTENTION");
+	client.send(frame("question.resolved", { questionID: "reject" }));
+	await waitForStatus(bridge, "BUSY");
+
+	const closed = once(client, "close");
+	client.close();
+	await closed;
+});
+
 test("a replacement connection retains an instance state until the active socket disconnects", async (t) => {
 	const bridge = new StatusBridgeServer({ port: 0 });
 	await once(bridge.server, "listening");

@@ -20,6 +20,8 @@ const clientMessageTypes = new Set([
 	"session.error",
 	"permission.asked",
 	"permission.replied",
+	"question.asked",
+	"question.resolved",
 ]);
 
 const reservedCommandTypes = new Set([
@@ -89,7 +91,9 @@ function isValidPayload(frame) {
 			return Array.isArray(frame.sessions)
 				&& frame.sessions.every(isSession)
 				&& Array.isArray(frame.permissions)
-				&& frame.permissions.every(isPermission);
+				&& frame.permissions.every(isPermission)
+				&& (frame.questions === undefined
+					|| (Array.isArray(frame.questions) && frame.questions.every(isQuestion)));
 		case "session.status":
 			return typeof frame.sessionID === "string" && isStatus(frame.status);
 		case "session.idle":
@@ -99,6 +103,10 @@ function isValidPayload(frame) {
 			return typeof frame.permissionID === "string" && typeof frame.sessionID === "string";
 		case "permission.replied":
 			return typeof frame.permissionID === "string";
+		case "question.asked":
+			return isNonEmptyString(frame.questionID) && isNonEmptyString(frame.sessionID);
+		case "question.resolved":
+			return isNonEmptyString(frame.questionID);
 		default:
 			return false;
 	}
@@ -107,6 +115,11 @@ function isValidPayload(frame) {
 /** @param {unknown} value */
 function optionalString(value) {
 	return value === undefined || typeof value === "string";
+}
+
+/** @param {unknown} value */
+function isNonEmptyString(value) {
+	return typeof value === "string" && value.length > 0;
 }
 
 /** @param {unknown} value */
@@ -122,4 +135,9 @@ function isSession(value) {
 /** @param {unknown} value */
 function isPermission(value) {
 	return isRecord(value) && typeof value.permissionID === "string" && typeof value.sessionID === "string";
+}
+
+/** @param {unknown} value */
+function isQuestion(value) {
+	return isRecord(value) && isNonEmptyString(value.questionID) && isNonEmptyString(value.sessionID);
 }

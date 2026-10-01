@@ -55,6 +55,7 @@ class OpenCodeBridge {
 		this.directory = context.location.directory;
 		this.sessions = new Map();
 		this.permissions = new Map();
+		this.questions = new Map();
 		this.socket = undefined;
 		this.reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
 		this.reconnectTimer = undefined;
@@ -176,6 +177,9 @@ class OpenCodeBridge {
 				for (const [permissionID, permission] of this.permissions) {
 					if (permission.sessionID === event.data.sessionID) this.permissions.delete(permissionID);
 				}
+				for (const [questionID, question] of this.questions) {
+					if (question.sessionID === event.data.sessionID) this.questions.delete(questionID);
+				}
 				this.sendSnapshot();
 				break;
 			case "permission.asked":
@@ -188,7 +192,38 @@ class OpenCodeBridge {
 				this.permissions.delete(event.data.requestID);
 				this.send({ type: "permission.replied", permissionID: event.data.requestID });
 				break;
+			case "question.asked":
+				this.registerQuestion(event.data.id, event.data.sessionID);
+				break;
+			case "question.replied":
+			case "question.rejected":
+				this.resolveQuestion(event.data.requestID);
+				break;
+			// OpenCode 2.0.19 exposes agent questions as forms rather than the
+			// legacy question.* events. Normalize both transports so the bridge
+			// protocol and status aggregation stay independent of that change.
+			case "form.created":
+				this.registerQuestion(event.data.form.id, event.data.form.sessionID);
+				break;
+			case "form.replied":
+			case "form.cancelled":
+				this.resolveQuestion(event.data.id);
+				break;
 		}
+	}
+
+	/** @param {string} questionID @param {string} sessionID */
+	registerQuestion(questionID, sessionID) {
+		logger.debug({ questionID, sessionID }, "Registering agent question");
+		this.questions.set(questionID, { sessionID });
+		this.send({ type: "question.asked", questionID, sessionID });
+	}
+
+	/** @param {string} questionID */
+	resolveQuestion(questionID) {
+		logger.debug({ questionID }, "Removing resolved agent question");
+		this.questions.delete(questionID);
+		this.send({ type: "question.resolved", questionID });
 	}
 
 	sendSnapshot() {
@@ -197,6 +232,7 @@ class OpenCodeBridge {
 			type: "snapshot",
 			sessions: [...this.sessions].map(([sessionID, status]) => ({ sessionID, status })),
 			permissions: [...this.permissions].map(([permissionID, { sessionID }]) => ({ permissionID, sessionID })),
+			questions: [...this.questions].map(([questionID, { sessionID }]) => ({ questionID, sessionID })),
 		});
 	}
 
