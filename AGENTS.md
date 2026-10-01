@@ -11,7 +11,7 @@ der temporäre code kann im projekt 'tmp' ordner liegen. er ist im .gitignore. a
 falls gitnexus nicht mehr aktuell ist, führe `gitnexus analyze` aus.
 
 ## Openspec archive
-wenn du openspec archive ausführst, führe auch immer einen openspec sync aus.
+bevor du `openspec archive` ausführst,  sync these delta specs into the main OpenSpec specifications before archiving.
 danach ein `gitnexus analyze`, um den index zu aktualisieren.
 danach ein git commit, um die änderungen zu sichern.
 

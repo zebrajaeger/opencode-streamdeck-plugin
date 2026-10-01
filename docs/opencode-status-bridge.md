@@ -50,6 +50,31 @@ Follow the bridge log in PowerShell while reproducing an issue:
 Get-Content "$HOME\.local\share\opencode\log\streamdeck-status-bridge.log" -Wait
 ```
 
-It records bridge lifecycle events, incoming OpenCode event types, outbound bridge message types, and errors that were previously intentionally swallowed to keep status reporting non-disruptive.
+It records plugin lifecycle records with `instanceID` and `directory`, along with outbound bridge message types and errors that were previously intentionally swallowed to keep status reporting non-disruptive. It does not log bridge-frame payloads.
+
+## Duplicate plugin-load diagnosis
+
+The Stream Deck bridge accepts one active status source for each exact OpenCode
+project directory. If OpenCode loads this plugin more than once for the same
+directory, the newest connection replaces the previous source: the earlier
+socket is closed and its sessions and unanswered permissions no longer affect
+the Stream Deck status. A bridge connection without a directory remains
+independent and is identified by its instance ID for compatibility with older
+clients.
+
+Connections for different directory strings remain independent contributors.
+Their combined Stream Deck status uses the existing priority order: unanswered
+permissions take precedence over errors, errors over busy sessions, and busy
+sessions over ready sources.
+
+To investigate repeated OpenCode plugin setup for one directory, follow the
+local bridge log above and look for the plugin messages `Setting up Stream Deck
+status bridge` and `Disposing Stream Deck status bridge setup`. Each carries
+the `instanceID` and `directory` fields. The Stream Deck plugin logs matching
+source ownership changes as `OpenCode status bridge lifecycle` records with
+`action: "source.registered"` or `action: "source.replaced"`; the latter also
+contains `directory`, `previousInstanceID`, and `instanceID`. A replacement
+record identifies which newer source became authoritative without exposing
+OpenCode event payloads.
 
 Release 1 is display-only. It does not approve or deny permissions, submit prompts, abort sessions, or focus an OpenCode session. The protocol reserves those command names for a future authenticated release; no shared secret or command handling exists yet.
