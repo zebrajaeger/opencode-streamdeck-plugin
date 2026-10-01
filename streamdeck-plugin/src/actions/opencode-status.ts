@@ -1,41 +1,23 @@
-import { action, SingletonAction, type KeyAction, type WillAppearEvent } from "@elgato/streamdeck";
+import { action, SingletonAction, type KeyAction, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
 import type { JsonObject } from "@elgato/utils";
 
 import type { GlobalStatusValue } from "../status-types";
+import { StatusActionRenderer } from "./particle-wait-animation";
 
 /** A display-only, global summary of every locally connected OpenCode bridge. */
 @action({ UUID: "de.lars-brandt.opencode.status" })
 export class OpenCodeStatus extends SingletonAction {
-	private status: GlobalStatusValue = "OFFLINE";
+	private readonly renderer = new StatusActionRenderer();
 
 	setStatus(status: GlobalStatusValue): void {
-		this.status = status;
-		for (const action of this.actions) {
-			if (action.isKey()) void this.render(action, status);
-		}
+		this.renderer.setStatus(status, [...this.actions].filter((action): action is KeyAction<JsonObject> => action.isKey()));
 	}
 
 	override async onWillAppear(event: WillAppearEvent): Promise<void> {
-		if (event.action.isKey()) await this.render(event.action, this.status);
+		if (event.action.isKey()) await this.renderer.renderCurrentStatus(event.action);
 	}
 
-	private async render(action: KeyAction<JsonObject>, status: GlobalStatusValue): Promise<void> {
-		await Promise.all([
-			action.setTitle(status),
-			action.setImage(statusImage(status)),
-		]);
+	override async onWillDisappear(event: WillDisappearEvent): Promise<void> {
+		await this.renderer.dispose(event.action.id);
 	}
-}
-
-function statusImage(status: GlobalStatusValue): string {
-	const colors: Record<GlobalStatusValue, string> = {
-		OFFLINE: "#5D6470",
-		READY: "#2E9E5B",
-		BUSY: "#2878C8",
-		ATTENTION: "#E69500",
-		ERROR: "#CF3D3D",
-	};
-	const color = colors[status];
-	const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144"><rect width="144" height="144" rx="18" fill="#101216"/><circle cx="72" cy="46" r="22" fill="${color}"/><path d="M43 91h58" stroke="${color}" stroke-width="12" stroke-linecap="round"/></svg>`;
-	return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
