@@ -24,6 +24,11 @@ export class StatusBridgeServer {
 		return this.registry.subscribe(listener);
 	}
 
+	/** @param {string} projectID @param {(status: import("../../shared/status-registry.mjs").GlobalStatusValue) => void} listener */
+	subscribeProject(projectID, listener) {
+		return this.registry.subscribeProject(projectID, listener);
+	}
+
 	async close() {
 		for (const socket of this.sockets.keys()) socket.close();
 		await new Promise((resolve) => this.server.close(() => resolve()));
@@ -68,11 +73,11 @@ export class StatusBridgeServer {
 				previousDirectorySource.socket.close(1000, "Replaced by directory source");
 			}
 
-			const source = { instanceID: frame.instanceID, directory, socket };
+			const source = { instanceID: frame.instanceID, projectID: nonEmptyProjectID(frame.projectID), directory, socket };
 			this.sockets.set(socket, source);
 			this.instanceSockets.set(frame.instanceID, socket);
 			if (directory) this.directorySources.set(directory, source);
-			this.registry.connect(frame.instanceID);
+			this.registry.connect(frame.instanceID, source.projectID);
 			logLifecycle("source.registered", { instanceID: frame.instanceID, directory });
 			return;
 		}
@@ -112,6 +117,11 @@ export class StatusBridgeServer {
 /** @param {unknown} directory */
 function nonEmptyDirectory(directory) {
 	return typeof directory === "string" && directory.length > 0 ? directory : undefined;
+}
+
+/** @param {unknown} projectID */
+function nonEmptyProjectID(projectID) {
+	return typeof projectID === "string" && projectID.length > 0 ? projectID : undefined;
 }
 
 /** @param {string} action @param {Record<string, unknown>} details */

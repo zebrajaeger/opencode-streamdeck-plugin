@@ -13,8 +13,10 @@ export type GlobalStatusValue = typeof GlobalStatus[keyof typeof GlobalStatus];
 export class StatusRegistry {
 	constructor(timers?: { now?: () => number; setTimeout?: typeof setTimeout; clearTimeout?: typeof clearTimeout });
 	subscribe(listener: (status: GlobalStatusValue) => void): () => boolean;
-	connect(instanceID: string): void;
+	subscribeProject(projectID: string, listener: (status: GlobalStatusValue) => void): () => boolean;
+	connect(instanceID: string, projectID?: string): void;
 	disconnect(instanceID: string): void;
 	apply(frame: BridgeFrame): void;
 	readonly status: GlobalStatusValue;
+	projectStatus(projectID: string): GlobalStatusValue;
 }

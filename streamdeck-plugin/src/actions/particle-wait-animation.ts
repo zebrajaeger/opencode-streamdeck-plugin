@@ -148,6 +148,10 @@ export class StatusActionRenderer {
 		await this.render(action, this.status);
 	}
 
+	async renderStatus(action: StatusKey, status: GlobalStatusValue): Promise<void> {
+		await this.render(action, status);
+	}
+
 	async dispose(actionID: string): Promise<void> {
 		const action = [...this.animations.keys()].find((key) => key.id === actionID);
 		if (!action) return;

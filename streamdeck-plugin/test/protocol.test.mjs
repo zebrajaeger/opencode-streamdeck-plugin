@@ -62,7 +62,20 @@ test("accepts valid question frames", () => {
 	})?.type, "question.resolved");
 });
 
-test("accepts hello frames with and without a directory", () => {
+test("accepts hello frames with optional project and directory identity", () => {
+	assert.equal(parseBridgeFrame({
+		version: 1,
+		type: "hello",
+		instanceID: "project-instance",
+		projectID: "project-123",
+		directory: "C:\\work\\project",
+	})?.projectID, "project-123");
+	assert.equal(parseBridgeFrame({
+		version: 1,
+		type: "hello",
+		instanceID: "invalid-project-instance",
+		projectID: 123,
+	}), undefined);
 	const directoryHello = parseBridgeFrame({
 		version: 1,
 		type: "hello",

@@ -17,6 +17,22 @@
 					"TitleAlignment": "middle"
 				}
 			]
+		},
+		{
+			"Name": "OpenCode Project Status",
+			"UUID": "de.lars-brandt.opencode.project-status",
+			"Icon": "imgs/plugin/category-icon",
+			"Tooltip": "Displays the status of one configured local OpenCode project.",
+			"PropertyInspectorPath": "property-inspector/project-status.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/plugin/category-icon",
+					"TitleAlignment": "middle"
+				}
+			]
 		}
 	],
 	"Category": "opencode",

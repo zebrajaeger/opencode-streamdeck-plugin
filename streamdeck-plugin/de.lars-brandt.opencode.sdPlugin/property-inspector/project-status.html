@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>OpenCode Project Status</title>
+	<style>body { font: 14px system-ui, sans-serif; margin: 16px; } label, input { display: block; width: 100%; } input { box-sizing: border-box; margin-top: 6px; } p { color: #666; line-height: 1.4; }</style>
+</head>
+<body>
+	<label for="project-id">OpenCode project ID</label>
+	<input id="project-id" type="text" autocomplete="off" placeholder="Project ID">
+	<p>Enter the exact project ID reported by OpenCode for the project this key should show. The key stays OFFLINE until it is configured or connected.</p>
+	<script>
+		const projectID = document.querySelector("#project-id");
+		const parameters = new URLSearchParams(location.search);
+		const websocket = new WebSocket(`ws://127.0.0.1:${parameters.get("port")}`);
+		const actionInfo = JSON.parse(parameters.get("actionInfo"));
+		const context = actionInfo.context;
+		websocket.addEventListener("message", ({ data }) => {
+			const message = JSON.parse(data);
+			if (message.event === "didReceiveSettings") projectID.value = message.payload.settings.projectID ?? "";
+		});
+		websocket.addEventListener("open", () => {
+			websocket.send(JSON.stringify({ event: parameters.get("registerEvent"), uuid: parameters.get("pluginUUID") }));
+			websocket.send(JSON.stringify({ event: "getSettings", context }));
+		});
+		projectID.addEventListener("change", () => websocket.send(JSON.stringify({ event: "setSettings", context, payload: { projectID: projectID.value } })));
+	</script>
+</body>
+</html>

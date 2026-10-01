@@ -27,15 +27,19 @@ export class StatusRegistry {
 
 	/** @param {(status: string) => void} listener */
 	subscribe(listener) {
-		this.listeners.add(listener);
-		listener(this.status);
-		return () => this.listeners.delete(listener);
+		return this.subscribeToStatus(() => this.status, listener);
 	}
 
-	/** @param {string} instanceID */
-	connect(instanceID) {
+	/** @param {string} projectID @param {(status: string) => void} listener */
+	subscribeProject(projectID, listener) {
+		return this.subscribeToStatus(() => this.projectStatus(projectID), listener);
+	}
+
+	/** @param {string} instanceID @param {string | undefined} [projectID] */
+	connect(instanceID, projectID) {
 		this.removeInstance(instanceID);
 		this.instances.set(instanceID, {
+			projectID,
 			sessions: new Map(),
 			permissions: new Map(),
 			questions: new Map(),
@@ -93,11 +97,22 @@ export class StatusRegistry {
 	}
 
 	get status() {
-		if (this.instances.size === 0) return GlobalStatus.OFFLINE;
+		return this.calculateStatus(this.instances.values());
+	}
+
+	/** @param {string} projectID */
+	projectStatus(projectID) {
+		return this.calculateStatus([...this.instances.values()].filter((instance) => instance.projectID === projectID));
+	}
+
+	/** @param {Iterable<{ permissions: Map<string, string>, questions: Map<string, string>, sessions: Map<string, string>, errorExpiresAt: number | undefined }>} instances */
+	calculateStatus(instances) {
+		let connected = false;
 
 		let busy = false;
 		let error = false;
-		for (const instance of this.instances.values()) {
+		for (const instance of instances) {
+			connected = true;
 			if (instance.permissions.size > 0 || instance.questions.size > 0) return GlobalStatus.ATTENTION;
 			for (const sessionStatus of instance.sessions.values()) {
 				if (sessionStatus === BridgeStatus.BUSY) busy = true;
@@ -105,14 +120,22 @@ export class StatusRegistry {
 			if (instance.errorExpiresAt && instance.errorExpiresAt > this.now()) error = true;
 		}
 
+		if (!connected) return GlobalStatus.OFFLINE;
 		if (error) return GlobalStatus.ERROR;
 		if (busy) return GlobalStatus.BUSY;
 		return GlobalStatus.READY;
 	}
 
 	notify() {
-		const status = this.status;
-		for (const listener of this.listeners) listener(status);
+		for (const listener of this.listeners) listener();
+	}
+
+	/** @param {() => string} getStatus @param {(status: string) => void} listener */
+	subscribeToStatus(getStatus, listener) {
+		const notify = () => listener(getStatus());
+		this.listeners.add(notify);
+		notify();
+		return () => this.listeners.delete(notify);
 	}
 
 	removeInstance(instanceID) {

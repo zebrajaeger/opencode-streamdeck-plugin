@@ -1,2 +1,2 @@
-/** States displayed by the global, read-only OpenCode Stream Deck action. */
+/** States displayed by the read-only OpenCode Stream Deck status actions. */
 export type GlobalStatusValue = "OFFLINE" | "READY" | "BUSY" | "ATTENTION" | "ERROR";

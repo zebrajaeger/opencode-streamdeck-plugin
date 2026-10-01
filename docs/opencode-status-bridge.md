@@ -76,6 +76,22 @@ Get-Content "$HOME\.local\share\opencode\log\streamdeck-status-bridge.log" -Wait
 
 It records plugin lifecycle records with `instanceID` and `directory`, along with outbound bridge message types and errors that were previously intentionally swallowed to keep status reporting non-disruptive. It does not log bridge-frame payloads.
 
+## Project-specific Stream Deck keys
+
+Alongside **OpenCode Status**, the plugin provides **OpenCode Project Status**.
+Add this action to a Stream Deck key and enter the exact OpenCode project ID in
+its property inspector. The project ID is the value OpenCode reports as
+`context.location.project.id` when the local bridge connects; it is included in
+the bridge's `hello` handshake and can be found in the local OpenCode project
+metadata or by inspecting that connection with OpenCode tooling.
+
+The configured key aggregates only connections that report that exact ID. It
+displays `OFFLINE` until an ID is saved and whenever that project has no active
+bridge connection. A project key never includes sessions, permission requests,
+or transient errors from another project. The existing **OpenCode Status** key
+remains the aggregate of every connected local bridge, including older bridges
+that do not provide a project ID.
+
 ## Duplicate plugin-load diagnosis
 
 The Stream Deck bridge accepts one active status source for each exact OpenCode

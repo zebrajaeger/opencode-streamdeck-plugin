@@ -1,5 +1,6 @@
 import streamDeck from "@elgato/streamdeck";
 
+import { OpenCodeProjectStatus } from "./actions/opencode-project-status";
 import { OpenCodeStatus } from "./actions/opencode-status";
 import { StatusBridgeServer } from "./status-bridge-server.mjs";
 
@@ -7,10 +8,13 @@ import { StatusBridgeServer } from "./status-bridge-server.mjs";
 streamDeck.logger.setLevel("trace");
 
 const statusAction = new OpenCodeStatus();
+const projectStatusAction = new OpenCodeProjectStatus();
 const statusBridge = new StatusBridgeServer();
 statusBridge.subscribe((status) => statusAction.setStatus(status));
+projectStatusAction.setProjectSubscriber((projectID, listener) => statusBridge.subscribeProject(projectID, listener));
 
 streamDeck.actions.registerAction(statusAction);
+streamDeck.actions.registerAction(projectStatusAction);
 
 // Finally, connect to the Stream Deck.
 streamDeck.connect();

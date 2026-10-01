@@ -22,6 +22,17 @@ function waitForStatus(server, expected) {
 	});
 }
 
+function waitForProjectStatus(server, projectID, expected) {
+	return new Promise((resolve) => {
+		const unsubscribe = server.subscribeProject(projectID, (status) => {
+			if (status === expected) {
+				unsubscribe();
+				resolve();
+			}
+		});
+	});
+}
+
 function createClock() {
 	let now = 0;
 	const timers = new Map();
@@ -185,6 +196,44 @@ test("sources for different directories aggregate according to status priority",
 	await waitForStatus(bridge, "ATTENTION");
 	secondClient.send(frame("permission.replied", { instanceID: "second", permissionID: "asked" }));
 	await waitForStatus(bridge, "BUSY");
+});
+
+test("isolates project status while retaining global aggregation and disconnect behavior", async (t) => {
+	const bridge = new StatusBridgeServer({ port: 0 });
+	await once(bridge.server, "listening");
+	t.after(() => bridge.close());
+
+	const address = bridge.server.address();
+	assert.equal(typeof address, "object");
+	const projectA = new WebSocket(`ws://127.0.0.1:${address.port}`);
+	const projectASecond = new WebSocket(`ws://127.0.0.1:${address.port}`);
+	const projectB = new WebSocket(`ws://127.0.0.1:${address.port}`);
+	await Promise.all([once(projectA, "open"), once(projectASecond, "open"), once(projectB, "open")]);
+	projectA.send(frame("hello", { instanceID: "project-a-one", projectID: "project-a" }));
+	projectASecond.send(frame("hello", { instanceID: "project-a-two", projectID: "project-a" }));
+	projectB.send(frame("hello", { instanceID: "project-b", projectID: "project-b" }));
+	await waitForProjectStatus(bridge, "project-a", "READY");
+
+	projectB.send(frame("permission.asked", { instanceID: "project-b", permissionID: "asked", sessionID: "waiting" }));
+	await waitForStatus(bridge, "ATTENTION");
+	assert.equal(bridge.registry.projectStatus("project-a"), "READY");
+
+	projectASecond.send(frame("session.status", { instanceID: "project-a-two", sessionID: "working", status: "busy" }));
+	await waitForProjectStatus(bridge, "project-a", "BUSY");
+
+	const firstClosed = once(projectA, "close");
+	projectA.close();
+	await firstClosed;
+	assert.equal(bridge.registry.projectStatus("project-a"), "BUSY");
+
+	const secondClosed = once(projectASecond, "close");
+	projectASecond.close();
+	await secondClosed;
+	await waitForProjectStatus(bridge, "project-a", "OFFLINE");
+
+	const projectBClosed = once(projectB, "close");
+	projectB.close();
+	await projectBClosed;
 });
 
 test("session errors are transient and reconnect snapshots do not restore them", async (t) => {

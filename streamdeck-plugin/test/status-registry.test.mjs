@@ -47,6 +47,34 @@ test("returns OFFLINE without a bridge connection", () => {
 	assert.equal(new StatusRegistry().status, "OFFLINE");
 });
 
+test("aggregates status within a project without changing global aggregation", () => {
+	const { registry } = createRegistry();
+	registry.connect(INSTANCE, "project-a");
+	registry.connect("instance-b", "project-b");
+	registry.connect("legacy-instance");
+	registry.apply(frame("session.status", { sessionID: "working", status: BridgeStatus.BUSY }));
+	registry.apply({ ...frame("permission.asked", { permissionID: "other-project", sessionID: "waiting" }), instanceID: "instance-b" });
+	registry.apply({ ...frame("session.error", { sessionID: "legacy-error" }), instanceID: "legacy-instance" });
+
+	assert.equal(registry.status, "ATTENTION");
+	assert.equal(registry.projectStatus("project-a"), "BUSY");
+	assert.equal(registry.projectStatus("project-b"), "ATTENTION");
+	assert.equal(registry.projectStatus("missing"), "OFFLINE");
+});
+
+test("notifies project subscribers only with their scoped aggregate status", () => {
+	const { registry } = createRegistry();
+	const projectAStatuses = [];
+	registry.subscribeProject("project-a", (status) => projectAStatuses.push(status));
+	registry.connect(INSTANCE, "project-a");
+	registry.connect("instance-b", "project-b");
+	registry.apply({ ...frame("permission.asked", { permissionID: "other-project", sessionID: "waiting" }), instanceID: "instance-b" });
+	registry.apply(frame("session.status", { sessionID: "working", status: BridgeStatus.BUSY }));
+	registry.disconnect(INSTANCE);
+
+	assert.deepEqual(projectAStatuses, ["OFFLINE", "READY", "READY", "READY", "BUSY", "OFFLINE"]);
+});
+
 test("displays an error immediately, then expires it after fifteen seconds", () => {
 	const { clock, registry } = createRegistry();
 	registry.connect(INSTANCE);
