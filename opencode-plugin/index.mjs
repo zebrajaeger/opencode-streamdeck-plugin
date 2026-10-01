@@ -46,7 +46,7 @@ export default Plugin.define({
 	},
 });
 
-class OpenCodeBridge {
+export class OpenCodeBridge {
 	/** @param {import("@opencode/plugin/promise/plugin").Context} context */
 	constructor(context) {
 		logger.debug("Creating Stream Deck status bridge");
@@ -71,11 +71,6 @@ class OpenCodeBridge {
 	async captureSnapshot() {
 		logger.debug("Capturing OpenCode status snapshot");
 		try {
-			const { data: sessions } = await this.context.session.list();
-			for (const session of sessions) {
-				this.sessions.set(session.id, BridgeStatus.READY);
-			}
-
 			const { data: permissions } = await this.context.permission.request.list();
 			for (const permission of permissions) {
 				this.permissions.set(permission.id, { sessionID: permission.sessionID });
@@ -163,7 +158,6 @@ class OpenCodeBridge {
 				break;
 			case "session.execution.failed":
 				logger.warn("Session execution failed");
-				this.sessions.set(event.data.sessionID, BridgeStatus.ERROR);
 				this.send({ type: "session.error", sessionID: event.data.sessionID });
 				break;
 			case "session.created":
@@ -230,7 +224,9 @@ class OpenCodeBridge {
 		logger.debug("Sending Stream Deck status snapshot");
 		this.send({
 			type: "snapshot",
-			sessions: [...this.sessions].map(([sessionID, status]) => ({ sessionID, status })),
+			sessions: [...this.sessions]
+				.filter(([, status]) => status === BridgeStatus.READY || status === BridgeStatus.BUSY)
+				.map(([sessionID, status]) => ({ sessionID, status })),
 			permissions: [...this.permissions].map(([permissionID, { sessionID }]) => ({ permissionID, sessionID })),
 			questions: [...this.questions].map(([questionID, { sessionID }]) => ({ questionID, sessionID })),
 		});

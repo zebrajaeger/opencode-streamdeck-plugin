@@ -89,13 +89,13 @@ function isValidPayload(frame) {
 			return optionalString(frame.projectID) && optionalString(frame.directory);
 		case "snapshot":
 			return Array.isArray(frame.sessions)
-				&& frame.sessions.every(isSession)
+				&& frame.sessions.every(isLiveSession)
 				&& Array.isArray(frame.permissions)
 				&& frame.permissions.every(isPermission)
 				&& (frame.questions === undefined
 					|| (Array.isArray(frame.questions) && frame.questions.every(isQuestion)));
 		case "session.status":
-			return typeof frame.sessionID === "string" && isStatus(frame.status);
+			return typeof frame.sessionID === "string" && isLiveStatus(frame.status);
 		case "session.idle":
 		case "session.error":
 			return typeof frame.sessionID === "string";
@@ -123,13 +123,13 @@ function isNonEmptyString(value) {
 }
 
 /** @param {unknown} value */
-function isStatus(value) {
-	return value === BridgeStatus.READY || value === BridgeStatus.BUSY || value === BridgeStatus.ERROR;
+function isLiveStatus(value) {
+	return value === BridgeStatus.READY || value === BridgeStatus.BUSY;
 }
 
 /** @param {unknown} value */
-function isSession(value) {
-	return isRecord(value) && typeof value.sessionID === "string" && isStatus(value.status);
+function isLiveSession(value) {
+	return isRecord(value) && typeof value.sessionID === "string" && isLiveStatus(value.status);
 }
 
 /** @param {unknown} value */

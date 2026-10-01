@@ -3,6 +3,9 @@
 	"private": true,
 	"type": "module",
 	"main": "./index.mjs",
+	"scripts": {
+		"test": "node --test test/**/*.test.mjs"
+	},
 	"dependencies": {
 		"@opencode/plugin": "2.0.18",
 		"pino": "^10.3.1"

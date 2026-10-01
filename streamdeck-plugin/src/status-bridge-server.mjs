@@ -8,9 +8,9 @@ const BRIDGE_PORT = 20666;
 
 /** Hosts the local OpenCode status protocol for the Stream Deck plugin. */
 export class StatusBridgeServer {
-	/** @param {{ host?: string, port?: number }} [options] */
-	constructor({ host = LOOPBACK_HOST, port = BRIDGE_PORT } = {}) {
-		this.registry = new StatusRegistry();
+	/** @param {{ host?: string, port?: number, registry?: StatusRegistry }} [options] */
+	constructor({ host = LOOPBACK_HOST, port = BRIDGE_PORT, registry = new StatusRegistry() } = {}) {
+		this.registry = registry;
 		this.sockets = new Map();
 		this.instanceSockets = new Map();
 		this.directorySources = new Map();

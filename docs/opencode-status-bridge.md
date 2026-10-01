@@ -3,12 +3,12 @@
 ## OpenCode integration verification
 
 This bridge uses the OpenCode V2 plugin API. The locally running OpenCode is
-currently **v2.0.19**; the bridge dependency supplies the compatible V2 client
+currently **v2.0.18**; the bridge dependency supplies the compatible V2 client
 types.
 
 - The configured `plugins` option accepts a local package directory. The bridge directory is an ESM package with `index.mjs` as its explicit `main` entry, so the configured absolute path `C:\\ws\\opencode-streamdeck-plugin\\opencode-plugin` resolves to the default plugin export.
 - The default export is a V2 `Plugin.define` definition with the stable ID `de.lars-brandt.opencode.streamdeck-status`. Its `setup(ctx)` starts a cancellable `ctx.event.subscribe()` loop and returns cleanup that aborts the subscription and closes the local bridge socket.
-- The plugin's generated V2 client supplies the startup `ctx.session.active()` map, `ctx.session.list()`, and the read-only `ctx.permission.request.list()` snapshot of outstanding requests. It subscribes to these event payloads:
+- The supported plugin context does not provide a session-list or active-session snapshot API. The bridge keeps session and question state only from events it observes after startup, and uses the read-only `ctx.permission.request.list()` snapshot for outstanding permissions. It subscribes to these event payloads:
 	- `session.status`: `{ sessionID, status }`, where `status.type` is `idle`, `retry`, or `busy`.
 	- `session.idle`: `{ sessionID }`.
 	- `session.execution.failed`: `{ sessionID, error }`.
@@ -25,10 +25,19 @@ V2 event payloads are read from `event.data`. The bridge normalizes both
 legacy question events and the current form-event transport into its question
 protocol state, then clears that state when the question/form is answered,
 rejected, or cancelled. The generated API exposes a permission-request
-snapshot but no question-list endpoint, so questions already awaiting an
-answer when the plugin starts cannot be recovered; questions observed during
-the plugin lifetime are retained across bridge reconnects. It only reports
-events and never registers permission hooks or invokes an OpenCode command.
+snapshot but no session-list or question-list endpoint. Consequently, sessions
+and questions already present when the bridge starts cannot be reconstructed;
+state observed during the plugin lifetime is retained across bridge reconnects.
+It only reports events and never registers permission hooks or invokes an
+OpenCode command.
+
+An execution failure is reported immediately as `ERROR`, but it is not a
+session state. Its indication lasts at most 15 seconds and is cleared
+immediately by a newer local `BUSY`, `READY`, or attention event. Reconnect
+snapshots are authoritative for the current observable sessions, permissions,
+and questions; they replace the Stream Deck side's old state and never replay
+historical failures. Persistent status priority is `ATTENTION`, then `BUSY`,
+then `READY`, then `OFFLINE`.
 
 ## Configuration and security
 
@@ -78,9 +87,9 @@ independent and is identified by its instance ID for compatibility with older
 clients.
 
 Connections for different directory strings remain independent contributors.
-Their combined Stream Deck status uses the existing priority order: unanswered
-permissions or unanswered agent questions take precedence over errors, errors
-over busy sessions, and busy sessions over ready sources.
+Their combined Stream Deck status gives unanswered permissions or unanswered
+agent questions priority over busy sessions and ready sources. A transient
+failure is displayed only until it expires or a newer live state supersedes it.
 
 To investigate repeated OpenCode plugin setup for one directory, follow the
 local bridge log above and look for the plugin messages `Setting up Stream Deck

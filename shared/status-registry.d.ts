@@ -11,6 +11,7 @@ export const GlobalStatus: Readonly<{
 export type GlobalStatusValue = typeof GlobalStatus[keyof typeof GlobalStatus];
 
 export class StatusRegistry {
+	constructor(timers?: { now?: () => number; setTimeout?: typeof setTimeout; clearTimeout?: typeof clearTimeout });
 	subscribe(listener: (status: GlobalStatusValue) => void): () => boolean;
 	connect(instanceID: string): void;
 	disconnect(instanceID: string): void;

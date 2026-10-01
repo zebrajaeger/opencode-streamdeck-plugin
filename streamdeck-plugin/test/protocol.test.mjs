@@ -22,6 +22,30 @@ test("accepts valid protocol frames", () => {
 	})?.type, "snapshot");
 });
 
+test("accepts live session-status frames but rejects error as persistent state", () => {
+	assert.equal(parseBridgeFrame({
+		version: 1,
+		type: "session.status",
+		instanceID: "instance",
+		sessionID: "session",
+		status: "busy",
+	})?.type, "session.status");
+	assert.equal(parseBridgeFrame({
+		version: 1,
+		type: "session.status",
+		instanceID: "instance",
+		sessionID: "session",
+		status: "error",
+	}), undefined);
+	assert.equal(parseBridgeFrame({
+		version: 1,
+		type: "snapshot",
+		instanceID: "instance",
+		sessions: [{ sessionID: "session", status: "error" }],
+		permissions: [],
+	}), undefined);
+});
+
 test("accepts valid question frames", () => {
 	assert.equal(parseBridgeFrame({
 		version: 1,

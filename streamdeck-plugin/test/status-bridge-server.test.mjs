@@ -4,6 +4,7 @@ import test from "node:test";
 
 import WebSocket from "ws";
 
+import { ERROR_INDICATION_DURATION_MS, StatusRegistry } from "../../shared/status-registry.mjs";
 import { StatusBridgeServer } from "../src/status-bridge-server.mjs";
 
 function frame(type, properties = {}) {
@@ -19,6 +20,31 @@ function waitForStatus(server, expected) {
 			}
 		});
 	});
+}
+
+function createClock() {
+	let now = 0;
+	const timers = new Map();
+	let nextTimerID = 1;
+	return {
+		now: () => now,
+		setTimeout(callback, delay) {
+			const timerID = nextTimerID++;
+			timers.set(timerID, { callback, at: now + delay });
+			return timerID;
+		},
+		clearTimeout(timerID) {
+			timers.delete(timerID);
+		},
+		advance(duration) {
+			now += duration;
+			for (const [timerID, timer] of [...timers]) {
+				if (timer.at > now) continue;
+				timers.delete(timerID);
+				timer.callback();
+			}
+		},
+	};
 }
 
 test("accepts a local WebSocket client on loopback and drops its state at disconnect", async (t) => {
@@ -159,4 +185,45 @@ test("sources for different directories aggregate according to status priority",
 	await waitForStatus(bridge, "ATTENTION");
 	secondClient.send(frame("permission.replied", { instanceID: "second", permissionID: "asked" }));
 	await waitForStatus(bridge, "BUSY");
+});
+
+test("session errors are transient and reconnect snapshots do not restore them", async (t) => {
+	const clock = createClock();
+	const registry = new StatusRegistry(clock);
+	const bridge = new StatusBridgeServer({ port: 0, registry });
+	await once(bridge.server, "listening");
+	t.after(() => bridge.close());
+
+	const address = bridge.server.address();
+	assert.equal(typeof address, "object");
+	const client = new WebSocket(`ws://127.0.0.1:${address.port}`);
+	await once(client, "open");
+	client.send(frame("hello"));
+	await waitForStatus(bridge, "READY");
+
+	client.send(frame("session.error", { sessionID: "failed" }));
+	await waitForStatus(bridge, "ERROR");
+	client.send(frame("session.status", { sessionID: "recovered", status: "busy" }));
+	await waitForStatus(bridge, "BUSY");
+
+	client.send(frame("session.error", { sessionID: "failed-again" }));
+	await waitForStatus(bridge, "ERROR");
+	const busyAfterExpiry = waitForStatus(bridge, "BUSY");
+	clock.advance(ERROR_INDICATION_DURATION_MS);
+	await busyAfterExpiry;
+
+	const firstClosed = once(client, "close");
+	client.close();
+	await firstClosed;
+	const reconnect = new WebSocket(`ws://127.0.0.1:${address.port}`);
+	await once(reconnect, "open");
+	reconnect.send(frame("hello"));
+	await waitForStatus(bridge, "READY");
+	reconnect.send(frame("snapshot", { sessions: [], permissions: [], questions: [] }));
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(bridge.registry.status, "READY");
+
+	const reconnectClosed = once(reconnect, "close");
+	reconnect.close();
+	await reconnectClosed;
 });
