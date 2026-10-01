@@ -8,5 +8,6 @@ export class StatusBridgeServer {
 	constructor(options?: { host?: string; port?: number; registry?: StatusRegistry });
 	subscribe(listener: (status: GlobalStatusValue) => void): () => boolean;
 	subscribeProject(projectID: string, listener: (status: GlobalStatusValue) => void): () => boolean;
+	subscribeKnownProject(listener: (project: { projectID: string; directory: string }) => void): () => boolean;
 	close(): Promise<void>;
 }

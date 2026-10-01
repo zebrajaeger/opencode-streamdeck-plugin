@@ -14,6 +14,7 @@ export class StatusBridgeServer {
 		this.sockets = new Map();
 		this.instanceSockets = new Map();
 		this.directorySources = new Map();
+		this.knownProjectListeners = new Set();
 		this.server = new WebSocketServer({ host, port });
 		this.server.on("connection", (socket, request) => this.handleConnection(socket, request.socket.remoteAddress));
 		this.server.on("error", (error) => console.error("OpenCode status bridge error:", error));
@@ -27,6 +28,12 @@ export class StatusBridgeServer {
 	/** @param {string} projectID @param {(status: import("../../shared/status-registry.mjs").GlobalStatusValue) => void} listener */
 	subscribeProject(projectID, listener) {
 		return this.registry.subscribeProject(projectID, listener);
+	}
+
+	/** @param {(project: { projectID: string, directory: string }) => void} listener */
+	subscribeKnownProject(listener) {
+		this.knownProjectListeners.add(listener);
+		return () => this.knownProjectListeners.delete(listener);
 	}
 
 	async close() {
@@ -78,6 +85,7 @@ export class StatusBridgeServer {
 			this.instanceSockets.set(frame.instanceID, socket);
 			if (directory) this.directorySources.set(directory, source);
 			this.registry.connect(frame.instanceID, source.projectID);
+			this.publishKnownProject(source.projectID, directory);
 			logLifecycle("source.registered", { instanceID: frame.instanceID, directory });
 			return;
 		}
@@ -111,6 +119,12 @@ export class StatusBridgeServer {
 	removeDirectorySource(directory, source) {
 		if (!directory || this.directorySources.get(directory) !== source) return;
 		this.directorySources.delete(directory);
+	}
+
+	/** @param {string | undefined} projectID @param {string | undefined} directory */
+	publishKnownProject(projectID, directory) {
+		if (!projectID || !directory) return;
+		for (const listener of this.knownProjectListeners) listener({ projectID, directory });
 	}
 }
 

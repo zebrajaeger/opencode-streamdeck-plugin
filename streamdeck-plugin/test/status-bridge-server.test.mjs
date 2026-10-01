@@ -236,6 +236,31 @@ test("isolates project status while retaining global aggregation and disconnect 
 	await projectBClosed;
 });
 
+test("publishes known project metadata only for complete handshakes and refreshes directories", async (t) => {
+	const bridge = new StatusBridgeServer({ port: 0 });
+	await once(bridge.server, "listening");
+	t.after(() => bridge.close());
+
+	const projects = [];
+	bridge.subscribeKnownProject((project) => projects.push(project));
+	const address = bridge.server.address();
+	assert.equal(typeof address, "object");
+	const client = new WebSocket(`ws://127.0.0.1:${address.port}`);
+	await once(client, "open");
+	client.send(frame("hello", { instanceID: "missing-directory", projectID: "project-a" }));
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.deepEqual(projects, []);
+
+	client.send(frame("hello", { instanceID: "first", projectID: "project-a", directory: "C:\\work\\first" }));
+	await new Promise((resolve) => setImmediate(resolve));
+	client.send(frame("hello", { instanceID: "second", projectID: "project-a", directory: "C:\\work\\second" }));
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.deepEqual(projects, [
+		{ projectID: "project-a", directory: "C:\\work\\first" },
+		{ projectID: "project-a", directory: "C:\\work\\second" },
+	]);
+});
+
 test("session errors are transient and reconnect snapshots do not restore them", async (t) => {
 	const clock = createClock();
 	const registry = new StatusRegistry(clock);
