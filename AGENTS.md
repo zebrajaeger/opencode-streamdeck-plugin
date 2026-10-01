@@ -1,4 +1,19 @@
+# AGENTS.md
 
+## Codeänderungen
+bitte achte darauf, dass du in dem opencode läufst, dessen plugin du modifizierst.
+eine codeänderung unterbricht möglicherweise diesen chat. von daher ist es sinnvoll, den code zu kopieren, um ihn zu bearbeiten.
+wenn du damit fertig bist, ersetzen ihn als möglichst atomare aktion.
+es ist NICHT wichtig, dass der chat nicht unterbrochen wird - es ist wichtig, dass der chat nicht unterbrochen wird, während du implementierst.
+der temporäre code kann im projekt 'tmp' ordner liegen. er ist im .gitignore. andernfalls verhindert der virenscanner möglicherweise den zugriff. 
+
+## Gitenxus
+falls gitnexus nicht mehr aktuell ist, führe `gitnexus analyze` aus.
+
+## Openspec archive
+wenn du openspec archive ausführst, führe auch immer einen openspec sync aus.
+danach ein `gitnexus analyze`, um den index zu aktualisieren.
+danach ein git commit, um die änderungen zu sichern.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
