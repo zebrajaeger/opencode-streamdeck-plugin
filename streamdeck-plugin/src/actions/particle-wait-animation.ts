@@ -201,7 +201,9 @@ export class StatusActionRenderer {
 		const project = this.projectPresentations.get(action.id);
 		const compose = (image: string) => project ? projectStatusImage(image, status, project) : image;
 		// Cancel animation immediately; drain its pending frames before static writes.
-		const replaceAnimation = !!project && refresh;
+		// Project frame writers capture this render's version. Never restart
+		// one after a static transition with an obsolete version guard.
+		const replaceAnimation = !!project && (refresh || status !== "BUSY");
 		const stopped = status !== "BUSY" || replaceAnimation ? this.animations.get(action)?.stop() : Promise.resolve();
 		if (replaceAnimation) this.animations.delete(action);
 		const pending = (async () => {
