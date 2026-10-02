@@ -7,7 +7,7 @@ function escapeText(value) {
 }
 
 /** Flat SVG groups are supported by Stream Deck's Qt renderer; nested SVG is not. */
-function textBand(value, position, label, font) {
+export function textBand(value, position, label, font) {
 	const { size, family, style, underline, color } = font;
 	const characters = Array.from(value.replace(/\s+/gu, " ").trim());
 	if (!characters.length) return "";
@@ -33,6 +33,14 @@ function textBand(value, position, label, font) {
 	// Qt's SVG renderer ignores text-decoration; draw the line explicitly in the same band.
 	const underlinePath = underline ? `<path d="M${64 - Math.min(width(Array.from(text)), 120) / 2} ${baseline + 2}h${Math.min(width(Array.from(text)), 120)}" stroke="${color}" stroke-width="${Math.max(1, size / 16)}"/>` : "";
 	return `<g transform="translate(8 ${y})" data-label="${label}" data-position="${position}"><text x="64" y="${baseline}" text-anchor="middle" font-family="${family}, sans-serif" font-size="${size}" font-weight="${style.includes("Bold") ? "bold" : "normal"}" font-style="${style.includes("Italic") ? "italic" : "normal"}" text-decoration="${underline ? "underline" : "none"}" fill="${color}">${escapeText(text)}</text>${underlinePath}</g>`;
+}
+
+/** Overlay one status label using the same font geometry as project keys. */
+export function statusFontImage(image, status, settings) {
+	const presentation = normalizeProjectPresentation(settings);
+	const svg = decodeURIComponent(image.slice(image.indexOf(",") + 1));
+	const font = { size: presentation.statusFontSize, family: presentation.statusFontFamily, style: presentation.statusFontStyle, underline: presentation.statusFontUnderline, color: presentation.statusFontColor };
+	return `data:image/svg+xml,${encodeURIComponent(svg.replace(/<\/svg>$/, `${textBand(status, "middle", "status", font)}</svg>`))}`;
 }
 
 /** Compose project-only labels on either a static image or a particle frame. */

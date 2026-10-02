@@ -1,6 +1,6 @@
 import type { GlobalStatusValue } from "../status-types";
 import { normalizeProjectPresentation, type ProjectPresentation } from "../../de.lars-brandt.opencode.sdPlugin/property-inspector/project-presentation.mjs";
-import { projectStatusImage } from "./project-status-image.mjs";
+import { projectStatusImage, statusFontImage } from "./project-status-image.mjs";
 import { BackgroundAnimation, backgroundImage, type BackgroundAnimationOptions } from "./background-animation.ts";
 import { ParticleWaitAnimation } from "./particle-wait-animation.ts";
 import { AttentionHaloAnimation, ATTENTION_HALO_ANIMATION } from "./attention-halo-animation.ts";
@@ -36,6 +36,7 @@ export class StatusActionRenderer {
 	private readonly presentations = new Map<StatusKey, KeyPresentation>();
 	private readonly writes = new Map<string, Promise<void>>();
 	private readonly projectPresentations = new Map<string, ProjectPresentation>();
+	private readonly globalPresentations = new Map<string, ProjectPresentation>();
 	private status: GlobalStatusValue = "OFFLINE";
 	private readonly options: StatusActionRendererOptions;
 
@@ -43,6 +44,10 @@ export class StatusActionRenderer {
 
 	configureProject(actionID: string, settings: Partial<ProjectPresentation>): void {
 		this.projectPresentations.set(actionID, normalizeProjectPresentation(settings));
+	}
+
+	configureGlobal(actionID: string, settings: Partial<ProjectPresentation>): void {
+		this.globalPresentations.set(actionID, normalizeProjectPresentation(settings));
 	}
 
 	setStatus(status: GlobalStatusValue, actions: Iterable<StatusKey>): void {
@@ -55,6 +60,7 @@ export class StatusActionRenderer {
 
 	async dispose(actionID: string): Promise<void> {
 		this.projectPresentations.delete(actionID);
+		this.globalPresentations.delete(actionID);
 		const pending = [...this.presentations.keys()].filter((key) => key.id === actionID).map((action) => {
 			this.presentations.delete(action);
 			const animation = this.animations.get(action);
@@ -69,7 +75,9 @@ export class StatusActionRenderer {
 	private compose(action: StatusKey, status: GlobalStatusValue, background: string): string {
 		const image = backgroundImage(background + (status === "ATTENTION" ? statusGlyph(ATTENTION_HALO_ANIMATION.color) : status === "READY" ? statusGlyph(READY_PLASMA_ANIMATION.color) : ""));
 		const project = this.projectPresentations.get(action.id);
-		return project ? projectStatusImage(image, status, project) : image;
+		if (project) return projectStatusImage(image, status, project);
+		const global = this.globalPresentations.get(action.id);
+		return global ? statusFontImage(image, status, global) : image;
 	}
 
 	private render(action: StatusKey, status: GlobalStatusValue, refresh = true): Promise<void> {
@@ -94,7 +102,7 @@ export class StatusActionRenderer {
 			animation = undefined;
 		}
 		const pending = (async () => {
-			if (!this.projectPresentations.has(action.id) && state.title !== status) {
+			if (!this.projectPresentations.has(action.id) && !this.globalPresentations.has(action.id) && state.title !== status) {
 				await this.write(action, current, async () => { await action.setTitle(status); state.title = status; });
 			}
 			await stopped;

@@ -1,5 +1,5 @@
 export const TEXT_POSITIONS = ["top", "middle", "bottom"];
-export const FONT_SIZES = Array.from({ length: 13 }, (_, index) => index + 16);
+export const FONT_SIZES = Array.from({ length: 19 }, (_, index) => index + 10);
 export const DEFAULT_FONT_SIZE = 20;
 export const FONT_FAMILIES = ["Arial", "Arial Black", "Courier New", "Georgia", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana"];
 export const FONT_STYLES = ["Regular", "Bold", "Italic", "Bold Italic"];

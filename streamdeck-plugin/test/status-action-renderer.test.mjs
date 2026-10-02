@@ -17,6 +17,73 @@ function clock() {
 	};
 }
 
+test("global status font renders static and animated labels using the shared project font geometry", async (t) => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key("global-font");
+	t.after(() => renderer.dispose(action.id));
+	renderer.configureGlobal(action.id, {});
+	await renderer.renderStatus(action, "OFFLINE");
+	assert.match(decode(action.images.at(-1)), /data-label="status" data-position="middle"/);
+	assert.match(decode(action.images.at(-1)), /font-family="Arial, sans-serif" font-size="20"/);
+	assert.deepEqual(action.titles, []);
+	renderer.configureGlobal(action.id, { statusFontSize: 23, statusFontFamily: "Georgia", statusFontStyle: "Bold Italic", statusFontUnderline: true, statusFontColor: "#FF00AA" });
+	for (const status of ["ERROR", "READY", "BUSY", "ATTENTION"]) {
+		await renderer.renderStatus(action, status); await flush();
+		const svg = decode(action.images.at(-1));
+		assert.match(svg, new RegExp(`>${status === "ATTENTION" ? "ATT" : status === "ERROR" ? "ERR" : status.slice(0, 2)}`));
+		assert.match(svg, /font-family="Georgia, sans-serif" font-size="23" font-weight="bold" font-style="italic" text-decoration="underline" fill="#FF00AA"/);
+		assert.match(svg, /stroke="#FF00AA"/);
+		if (["READY", "BUSY", "ATTENTION"].includes(status)) {
+			await time.tick();
+			assert.match(decode(action.images.at(-1)), new RegExp(`>${status === "ATTENTION" ? "ATT" : status.slice(0, 2)}`));
+		}
+	}
+	assert.deepEqual(action.titles, []);
+});
+
+test("global keys retain independent font settings without affecting project labels or status", async (t) => {
+	const renderer = new StatusActionRenderer(clock().options), a = key("global-a"), b = key("global-b"), project = key("project");
+	t.after(async () => { for (const action of [a, b, project]) await renderer.dispose(action.id); });
+	renderer.configureGlobal(a.id, { statusFontColor: "#FF0000" });
+	renderer.configureGlobal(b.id, { statusFontColor: "#00FF00" });
+	renderer.configureProject(project.id, { projectName: "Alpha" });
+	renderer.setStatus("OFFLINE", [a, b]);
+	await renderer.renderStatus(project, "OFFLINE"); await flush();
+	assert.match(decode(a.images.at(-1)), /fill="#FF0000">OFFLINE/);
+	assert.match(decode(b.images.at(-1)), /fill="#00FF00">OFFLINE/);
+	assert.match(decode(project.images.at(-1)), /data-label="name"/);
+	const otherImages = [b.images.length, project.images.length];
+	renderer.configureGlobal(a.id, { statusFontColor: "#0000FF" });
+	await renderer.renderCurrentStatus(a);
+	assert.match(decode(a.images.at(-1)), /fill="#0000FF">OFFLINE/);
+	assert.deepEqual([b.images.length, project.images.length], otherImages);
+});
+
+for (const status of ["READY", "BUSY", "ATTENTION"]) test(`global ${status} font refresh retains phase and rejects stale queued frames`, async (t) => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key(`global-${status}`), gate = deferred();
+	t.after(() => renderer.dispose(action.id));
+	renderer.configureGlobal(action.id, { statusFontColor: "#FF0000" });
+	renderer.setStatus(status, [action]); await flush(); await time.tick(150);
+	const cancelsBefore = time.cancels;
+	const initial = decode(action.images.at(-1));
+	const original = action.setImage.bind(action);
+	let blocked = false;
+	action.setImage = async (image) => { if (!blocked) { blocked = true; await gate.promise; } await original(image); };
+	await time.tick(150);
+	assert.equal(blocked, true);
+	renderer.configureGlobal(action.id, { statusFontColor: "#00FF00" });
+	const refreshed = renderer.renderCurrentStatus(action);
+	gate.resolve(); await refreshed; await flush();
+	const latest = decode(action.images.at(-1));
+	assert.match(latest, /fill="#00FF00"/);
+	assert.equal(time.starts, 1); assert.equal(time.cancels, cancelsBefore);
+	if (status === "ATTENTION") assert.match(latest, /attention-halo/);
+	if (status === "READY") assert.match(latest, /ready-plasma/);
+	if (status === "BUSY") assert.match(latest, /<line /);
+	assert.notEqual(latest, initial);
+	await time.tick(150);
+	assert.match(decode(action.images.at(-1)), /fill="#00FF00"/);
+});
+
 test("attention continues for multiple cycles; duplicate reports and explicit refresh retain phase, glyph and title", async (t) => {
 	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key("a");
 	t.after(() => renderer.dispose(action.id));

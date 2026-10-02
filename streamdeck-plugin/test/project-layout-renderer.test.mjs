@@ -8,13 +8,13 @@ const decode = (image) => decodeURIComponent(image.split(",")[1]);
 const flush = async () => { await new Promise(setImmediate); await new Promise(setImmediate); };
 const key = (id) => ({ id, images: [], titles: [], async setImage(image) { this.images.push(image); }, async setTitle(title) { this.titles.push(title); } });
 
-test("only the project manifest disables native titles", async () => {
+test("project and global manifests disable native titles for their image-drawn labels", async () => {
 	const manifest = JSON.parse(await readFile(new URL("../de.lars-brandt.opencode.sdPlugin/manifest.json", import.meta.url)));
 	const [global, project] = manifest.Actions;
 	assert.equal(project.UserTitleEnabled, false);
 	assert.equal(project.States[0].ShowTitle, false);
-	assert.equal(global.UserTitleEnabled, undefined);
-	assert.deepEqual(global.States, [{ Image: "imgs/plugin/category-icon", TitleAlignment: "middle" }]);
+	assert.equal(global.UserTitleEnabled, false);
+	assert.deepEqual(global.States, [{ Image: "imgs/plugin/category-icon", ShowTitle: false }]);
 });
 
 for (const status of ["OFFLINE", "READY", "ATTENTION", "ERROR"]) {

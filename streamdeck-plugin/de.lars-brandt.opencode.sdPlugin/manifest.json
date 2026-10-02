@@ -8,13 +8,15 @@
 			"UUID": "de.lars-brandt.opencode.status",
 			"Icon": "imgs/plugin/category-icon",
 			"Tooltip": "Displays the global status of connected local OpenCode instances.",
+			"PropertyInspectorPath": "property-inspector/status.html",
+			"UserTitleEnabled": false,
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
 					"Image": "imgs/plugin/category-icon",
-					"TitleAlignment": "middle"
+					"ShowTitle": false
 				}
 			]
 		},

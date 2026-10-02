@@ -82,9 +82,9 @@ test("independent font attributes normalize safely and preserve legacy appearanc
 });
 
 test("font-size normalization is numeric, deterministic and independent", () => {
-	assert.deepEqual(FONT_SIZES, Array.from({ length: 13 }, (_, index) => index + 16));
+	assert.deepEqual(FONT_SIZES, Array.from({ length: 19 }, (_, index) => index + 10));
 	assert.equal(normalizeProjectPresentation({ nameFontSize: 23, statusFontSize: 27 }).nameFontSize, 23);
-	for (const value of [undefined, null, "24", NaN, Infinity, 0, -1, 15, 28.5, 100]) {
+	for (const value of [undefined, null, "24", NaN, Infinity, 0, -1, 9, 28.5, 100]) {
 		const normalized = normalizeProjectPresentation({ nameFontSize: value, statusFontSize: 24 });
 		assert.equal(normalized.nameFontSize, DEFAULT_FONT_SIZE);
 		assert.equal(normalized.statusFontSize, 24);

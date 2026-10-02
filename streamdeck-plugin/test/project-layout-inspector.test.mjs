@@ -91,7 +91,7 @@ test("dedicated name instructions and controls are visible outside the advanced 
 	assert.match(visible, /Use Project name instead of the native Stream Deck title/);
 	assert.match(html, /<dialog id="font-dialog" aria-labelledby="font-dialog-title">/);
 	for (const id of ["font-family", "font-size", "font-style", "font-underline", "font-color"]) assert.ok(html.includes(`for="${id}"`));
-	assert.match(html, /<input type="range" id="font-size" min="16" max="28" step="1"/);
+	assert.match(html, /<input type="range" id="font-size" min="10" max="28" step="1"/);
 	assert.match(html, /<output id="font-size-value" for="font-size">20 px<\/output>/);
 });
 

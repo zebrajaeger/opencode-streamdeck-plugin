@@ -1,4 +1,5 @@
-import { FONT_FAMILIES, FONT_STYLES, normalizeProjectPresentation } from "./project-presentation.mjs";
+import { normalizeProjectPresentation } from "./project-presentation.mjs";
+import { setupFontDialog } from "./font-dialog.mjs";
 
 export function projectBasename(directory) {
 	return directory.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean).at(-1) || directory;
@@ -54,18 +55,7 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	const projectName = document.querySelector("#project-name");
 	const namePosition = document.querySelector("#name-position");
 	const statusPosition = document.querySelector("#status-position");
-	const fontDialog = document.querySelector("#font-dialog");
-	const fontForm = document.querySelector("#font-form");
-	const fontTitle = document.querySelector("#font-dialog-title");
-	const fontFamily = document.querySelector("#font-family");
-	const fontSize = document.querySelector("#font-size");
-	const fontSizeValue = document.querySelector("#font-size-value");
-	const fontStyle = document.querySelector("#font-style");
-	const fontUnderline = document.querySelector("#font-underline");
-	const fontColor = document.querySelector("#font-color");
 	const triggers = { name: document.querySelector("#name-font"), status: document.querySelector("#status-font") };
-	let editingFont = null;
-	let returnFocus = null;
 	let rendering = false;
 	const update = (callback) => {
 		rendering = true;
@@ -74,15 +64,6 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	const onChange = (control, callback) => control.addEventListener("valuechange", () => {
 		if (!rendering) callback();
 	});
-	for (const [select, choices] of [[fontFamily, FONT_FAMILIES], [fontStyle, FONT_STYLES]]) {
-		for (const choice of choices) {
-			const option = document.createElement("option");
-			option.value = String(choice);
-			option.textContent = String(choice);
-			select.append(option);
-		}
-	}
-	fontSize.addEventListener("input", () => { fontSizeValue.textContent = `${fontSize.value} px`; });
 	const connection = inspectorRegistration(port, uuid, registerEvent, actionInfo);
 	const websocket = new WebSocket(connection.url);
 	const context = connection.context;
@@ -181,40 +162,7 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	onChange(projectName, () => save({ projectName: projectName.value }));
 	onChange(namePosition, () => save({ namePosition: namePosition.value }));
 	onChange(statusPosition, () => save({ statusPosition: statusPosition.value }));
-	for (const [prefix, trigger] of Object.entries(triggers)) trigger.addEventListener("click", () => {
-		const presentation = normalizeProjectPresentation(settings);
-		editingFont = prefix;
-		returnFocus = trigger;
-		fontTitle.textContent = prefix === "name" ? "Name font" : "Status font";
-		fontFamily.value = presentation[`${prefix}FontFamily`];
-		fontSize.value = String(presentation[`${prefix}FontSize`]);
-		fontSizeValue.textContent = `${fontSize.value} px`;
-		fontStyle.value = presentation[`${prefix}FontStyle`];
-		fontUnderline.checked = presentation[`${prefix}FontUnderline`];
-		fontColor.value = presentation[`${prefix}FontColor`];
-		fontDialog.showModal();
-		fontFamily.focus();
-	});
-	fontForm.addEventListener("submit", (event) => {
-		event.preventDefault();
-		if (!editingFont) return;
-		const prefix = editingFont;
-		const changes = {
-			[`${prefix}FontFamily`]: fontFamily.value,
-			[`${prefix}FontSize`]: Number(fontSize.value),
-			[`${prefix}FontStyle`]: fontStyle.value,
-			[`${prefix}FontUnderline`]: fontUnderline.checked,
-			[`${prefix}FontColor`]: fontColor.value.toUpperCase(),
-		};
-		fontDialog.close();
-		save(changes);
-	});
-	document.querySelector("#font-cancel").addEventListener("click", () => fontDialog.close());
-	fontDialog.addEventListener("close", () => {
-		editingFont = null;
-		returnFocus?.focus();
-		returnFocus = null;
-	});
+	setupFontDialog(triggers, () => settings, save);
 	for (const [id, section] of Object.entries(sections)) {
 		section.addEventListener("toggle", () => {
 			if (!restoringSections && section.open !== sectionStates(settings, defaults)[id]) {

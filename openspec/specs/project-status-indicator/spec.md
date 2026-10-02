@@ -345,7 +345,7 @@ The project-status action SHALL show the current status text at its configured p
 ### Requirement: Independently configurable name and status font sizes
 The project-status configuration SHALL provide a separate font dialog for the project name and status in place of the two font-size selectors. Each dialog SHALL offer font family, size, regular/bold/italic/bold-italic style, underline, and text color; each choice SHALL be persisted per key and SHALL update only its own displayed text without requiring a status transition. The chosen size SHALL remain fixed regardless of text length; text exceeding the available region SHALL be shortened with an ellipsis rather than rendered at a smaller size or horizontally compressed. Supported choices SHALL keep both elements within their separate regions. Missing or unsupported size settings SHALL resolve consistently in the inspector and runtime to readable defaults. These controls SHALL NOT change the global key's presentation.
 
-The font-size control SHALL be a horizontal slider supporting every whole-pixel size from 16 through 28, with a visible value that updates as the slider moves. Moving the slider SHALL only edit the dialog's draft; applying the dialog SHALL save the selected value, and dismissing it SHALL leave the stored value unchanged.
+The font-size control SHALL be a horizontal slider supporting every whole-pixel size from 10 through 28, with a visible value that updates as the slider moves. Moving the slider SHALL only edit the dialog's draft; applying the dialog SHALL save the selected value, and dismissing it SHALL leave the stored value unchanged.
 
 #### Scenario: User changes the project-name size
 - **WHEN** the user chooses a different project-name font size while status is unchanged
