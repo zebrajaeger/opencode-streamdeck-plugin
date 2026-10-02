@@ -12,6 +12,10 @@ types.
 	- `session.status`: `{ sessionID, status }`, where `status.type` is `idle`, `retry`, or `busy`.
 	- `session.idle`: `{ sessionID }`.
 	- `session.execution.failed`: `{ sessionID, error }`.
+	- `session.compaction.failed`: `{ sessionID, reason, error }`, for both
+		automatic and manual compaction.
+	- `session.retry.scheduled`: `{ sessionID, attempt, ... }`, reported as
+		working activity.
 	- `permission.asked`: `{ id, sessionID, ... }`.
 	- `permission.replied`: `{ sessionID, requestID, reply }`.
 	- Legacy question events, when provided by an OpenCode release:
@@ -31,13 +35,30 @@ state observed during the plugin lifetime is retained across bridge reconnects.
 It only reports events and never registers permission hooks or invokes an
 OpenCode command.
 
-An execution failure is reported immediately as `ERROR`, but it is not a
-session state. Its indication lasts at most 15 seconds and is cleared
-immediately by a newer local `BUSY`, `READY`, or attention event. Reconnect
-snapshots are authoritative for the current observable sessions, permissions,
-and questions; they replace the Stream Deck side's old state and never replay
-historical failures. Persistent status priority is `ATTENTION`, then `BUSY`,
-then `READY`, then `OFFLINE`.
+An execution failure or compaction failure is reported immediately as `ERROR`,
+but it is not a session state. Its indication lasts at most 15 seconds and is
+cleared immediately by a newer local `BUSY`, `READY`, or attention event.
+
+Either failure also ends the work last observed for that session, because no
+idle event follows a failure. Without this correction, a chat that fails - for
+example because its input exceeds the model context window, including a failed
+compaction - would keep its key `BUSY` indefinitely. Once the indication
+expires, the key shows the highest status that still applies: `READY` when
+nothing else is running, or `BUSY` while another session continues working.
+Other sessions, unanswered permission requests, and unanswered questions are
+untouched by this recovery, and attention keeps its priority. A later working
+or scheduled-retry event reports that session as working again. Retries alone
+are working activity and never produce `ERROR`.
+
+This covers failures OpenCode reports. A chat that stops without emitting any
+failure, idle, or completion event is not detected; the bridge does not infer a
+hang from elapsed time.
+
+Reconnect snapshots are authoritative for the current observable sessions,
+permissions, and questions; they replace the Stream Deck side's old state and
+never replay historical failures or a failed session's obsolete working state.
+Persistent status priority is `ATTENTION`, then `BUSY`, then `READY`, then
+`OFFLINE`.
 
 ## Configuration and security
 

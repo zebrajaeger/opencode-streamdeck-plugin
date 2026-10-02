@@ -74,7 +74,11 @@ export class StatusRegistry {
 				instance.sessions.set(frame.sessionID, BridgeStatus.READY);
 				this.clearError(instance);
 				break;
+			// A failure ends the work last reported for that session. Correcting
+			// it together with the transient indication keeps the key from
+			// falling back to a stale BUSY once the error expires.
 			case "session.error":
+				instance.sessions.set(frame.sessionID, BridgeStatus.READY);
 				this.setError(instance);
 				break;
 			case "permission.asked":

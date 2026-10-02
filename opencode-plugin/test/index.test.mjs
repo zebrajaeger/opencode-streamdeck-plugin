@@ -101,6 +101,7 @@ const creationEvents = [
 	["session.execution.started", {}], ["session.execution.succeeded", {}],
 	["session.execution.interrupted", {}], ["session.status", { status: { type: "busy" } }],
 	["session.idle", {}], ["session.execution.failed", {}], ["session.created", {}],
+	["session.compaction.failed", { reason: "auto" }], ["session.retry.scheduled", {}],
 	["permission.asked", { id: "request" }], ["question.asked", { id: "request" }],
 	["form.created", { form: { id: "request", sessionID: "target" } }],
 ];
@@ -142,6 +143,93 @@ test("metadata must have matching id and nonempty projectID; later checks retry"
 	context.session.get = async () => ({ id: "own", projectID: "project", directory: "elsewhere" });
 	await bridge.handleEvent(event("session.execution.started", { sessionID: "own" }));
 	assert.equal(bridge.sessions.get("own"), "busy");
+});
+
+const terminalFailures = [
+	["session.execution.failed", { error: { name: "ContextWindowExceeded" } }],
+	["session.compaction.failed", { reason: "auto", error: { name: "ContextWindowExceeded" } }],
+	["session.compaction.failed", { reason: "manual", error: { name: "ContextWindowExceeded" } }],
+];
+for (const [type, extra] of terminalFailures) {
+	test(`${type} (${extra.reason ?? "execution"}) ends the failed session's busy state without an idle frame`, async (t) => {
+		const context = createContext(); context.permission = {};
+		const bridge = await connected(t, context);
+		await bridge.handleEvent(event("session.execution.started", { sessionID: "failing" }));
+		await bridge.handleEvent(event("session.execution.started", { sessionID: "other" }));
+		await bridge.handleEvent(event("permission.asked", { id: "request", sessionID: "other" }));
+		const count = bridge.socket.messages.length;
+		await bridge.handleEvent(event(type, { sessionID: "failing", ...extra }));
+
+		assert.deepEqual(bridge.socket.messages.slice(count).map(({ type: sent }) => sent), ["session.error"]);
+		assert.deepEqual(bridge.socket.messages.at(-1), { version: 1, instanceID: bridge.instanceID, type: "session.error", sessionID: "failing" });
+		assert.equal(bridge.sessions.get("failing"), BridgeStatus.READY);
+		assert.equal(bridge.sessions.get("other"), BridgeStatus.BUSY);
+		assert.equal(bridge.permissions.has("request"), true);
+
+		await bridge.sendSnapshot();
+		const snapshot = bridge.socket.messages.at(-1);
+		assert.deepEqual(snapshot.sessions, [{ sessionID: "failing", status: BridgeStatus.READY }, { sessionID: "other", status: BridgeStatus.BUSY }]);
+		assert.deepEqual(snapshot.permissions, [{ permissionID: "request", sessionID: "other" }]);
+	});
+}
+
+test("scheduled retries stay busy and restore work after a failure without reporting an error", async (t) => {
+	const context = createContext(); context.permission = {};
+	const bridge = await connected(t, context);
+	await bridge.handleEvent(event("session.retry.scheduled", { sessionID: "own", attempt: 2 }));
+	assert.equal(bridge.sessions.get("own"), BridgeStatus.BUSY);
+	assert.deepEqual(bridge.socket.messages.at(-1), { version: 1, instanceID: bridge.instanceID, type: "session.status", sessionID: "own", status: BridgeStatus.BUSY });
+
+	await bridge.handleEvent(event("session.execution.failed", { sessionID: "own" }));
+	assert.equal(bridge.sessions.get("own"), BridgeStatus.READY);
+	for (const [type, data] of [["session.retry.scheduled", { sessionID: "own" }], ["session.execution.started", { sessionID: "own" }], ["session.status", { sessionID: "own", status: { type: "busy" } }]]) {
+		await bridge.handleEvent(event("session.execution.failed", { sessionID: "own" }));
+		await bridge.handleEvent(event(type, data));
+		assert.equal(bridge.sessions.get("own"), BridgeStatus.BUSY);
+	}
+	for (const [type, data] of [["session.idle", { sessionID: "own" }], ["session.execution.succeeded", { sessionID: "own" }], ["session.execution.interrupted", { sessionID: "own", reason: "user" }], ["session.status", { sessionID: "own", status: { type: "idle" } }]]) {
+		await bridge.handleEvent(event("session.execution.started", { sessionID: "own" }));
+		await bridge.handleEvent(event(type, data));
+		assert.equal(bridge.sessions.get("own"), BridgeStatus.READY);
+	}
+});
+
+test("failures preserve order under pending lookups, survive outage and reconnect, and stop at disposal", async (t) => {
+	const context = createContext(); context.permission = {};
+	const bridge = await connected(t, context);
+	await bridge.handleEvent(event("session.execution.started", { sessionID: "own" }));
+
+	// A late-resolving busy lookup must not overwrite the newer failure outcome.
+	const pending = deferred(); let calls = 0;
+	context.session.get = ({ sessionID }) => ++calls === 1 ? pending.promise : Promise.resolve({ id: sessionID, projectID: "project" });
+	const busy = bridge.handleEvent(event("session.execution.started", { sessionID: "own" }));
+	const failed = bridge.handleEvent(event("session.compaction.failed", { sessionID: "own", reason: "auto" }));
+	await flush();
+	pending.resolve({ id: "own", projectID: "project" });
+	await Promise.all([busy, failed]);
+	assert.deepEqual(bridge.socket.messages.slice(-2).map(({ type }) => type), ["session.status", "session.error"]);
+	assert.equal(bridge.sessions.get("own"), BridgeStatus.READY);
+
+	// A failure observed while disconnected still corrects the reconnect snapshot.
+	await bridge.handleEvent(event("session.execution.started", { sessionID: "own" }));
+	const old = bridge.socket;
+	old.close();
+	clearTimeout(bridge.reconnectTimer); bridge.reconnectTimer = undefined;
+	await bridge.handleEvent(event("session.execution.failed", { sessionID: "own" }));
+	bridge.connect(); bridge.socket.open(); await bridge.work;
+	assert.deepEqual(bridge.socket.messages[1].sessions, [{ sessionID: "own", status: BridgeStatus.READY }]);
+
+	// Unloading during the ownership lookup must publish nothing further.
+	await bridge.handleEvent(event("session.execution.started", { sessionID: "own" }));
+	const stalled = deferred();
+	context.session.get = () => stalled.promise;
+	const work = bridge.handleEvent(event("session.execution.failed", { sessionID: "own" }));
+	await flush();
+	const socket = bridge.socket, count = socket.messages.length;
+	bridge.dispose(); await work;
+	stalled.resolve({ id: "own", projectID: "project" }); await flush();
+	assert.equal(socket.messages.length, count);
+	assert.equal(bridge.sessions.get("own"), BridgeStatus.BUSY);
 });
 
 test("queued direct events and subscription preserve busy then idle, even after a failed lookup", async (t) => {
@@ -358,7 +446,10 @@ test("reconnect snapshots omit failed executions while later live events transmi
 	secondSocket.open();
 	await bridge.work;
 	const reconnectSnapshot = secondSocket.messages.find((message) => message.type === "snapshot");
-	assert.deepEqual(reconnectSnapshot.sessions, []);
+	// The failed session is reported as finished work, never as retained BUSY,
+	// and the historical failure itself is not replayed.
+	assert.deepEqual(reconnectSnapshot.sessions, [{ sessionID: "failed", status: BridgeStatus.READY }]);
+	assert.equal(secondSocket.messages.some(({ type }) => type === "session.error"), false);
 
 	await bridge.handleEvent(event("session.execution.started", { sessionID: "recovered" }));
 	assert.deepEqual(secondSocket.messages.at(-1), {

@@ -245,7 +245,7 @@ export class OpenCodeBridge {
 	}
 
 	async applyEvent(event) {
-		const creations = ["session.execution.started", "session.execution.succeeded", "session.execution.interrupted", "session.status", "session.idle", "session.execution.failed", "session.created", "session.moved", "permission.asked", "question.asked", "form.created"];
+		const creations = ["session.execution.started", "session.execution.succeeded", "session.execution.interrupted", "session.status", "session.idle", "session.execution.failed", "session.compaction.failed", "session.retry.scheduled", "session.created", "session.moved", "permission.asked", "question.asked", "form.created"];
 		const data = event.data;
 		if (creations.includes(event.type)) {
 			const sessionID = event.type === "form.created" ? data.form.sessionID : data.sessionID;
@@ -255,6 +255,7 @@ export class OpenCodeBridge {
 		}
 		switch (event.type) {
 			case "session.execution.started":
+			case "session.retry.scheduled":
 				logger.debug("Marking session as busy");
 				this.sessions.set(event.data.sessionID, BridgeStatus.BUSY);
 				this.send({ type: "session.status", sessionID: event.data.sessionID, status: BridgeStatus.BUSY });
@@ -281,8 +282,14 @@ export class OpenCodeBridge {
 				this.sessions.set(event.data.sessionID, BridgeStatus.READY);
 				this.send({ type: "session.idle", sessionID: event.data.sessionID });
 				break;
+			// A failed execution or compaction ends the work that was last
+			// observed for that session. Retaining its busy state would outlive
+			// the transient error indication and never be cleared, because no
+			// idle event follows a failure. Later real activity restores it.
 			case "session.execution.failed":
-				logger.warn("Session execution failed");
+			case "session.compaction.failed":
+				logger.warn({ event: event.type }, "Session work failed");
+				this.sessions.set(event.data.sessionID, BridgeStatus.READY);
 				this.send({ type: "session.error", sessionID: event.data.sessionID });
 				break;
 			case "session.created":

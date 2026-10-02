@@ -89,6 +89,69 @@ test("displays an error immediately, then expires it after fifteen seconds", () 
 	assert.equal(clock.timerCount, 0);
 });
 
+test("a failed session stops contributing BUSY once its error indication expires", () => {
+	const { clock, registry } = createRegistry();
+	const statuses = [];
+	registry.subscribe((status) => statuses.push(status));
+	registry.connect(INSTANCE);
+	registry.apply(frame("session.status", { sessionID: "failing", status: BridgeStatus.BUSY }));
+	registry.apply(frame("session.error", { sessionID: "failing" }));
+
+	clock.advance(ERROR_INDICATION_DURATION_MS - 1);
+	assert.equal(registry.status, "ERROR");
+	clock.advance(1);
+	assert.equal(registry.status, "READY");
+	assert.deepEqual(statuses, ["OFFLINE", "READY", "BUSY", "ERROR", "READY"]);
+	assert.equal(clock.timerCount, 0);
+});
+
+test("failure recovery leaves other sessions, permissions and questions untouched", () => {
+	const { clock, registry } = createRegistry();
+	const { clock: attentionClock, registry: attention } = createRegistry();
+	registry.connect(INSTANCE);
+	registry.apply(frame("session.status", { sessionID: "failing", status: BridgeStatus.BUSY }));
+	registry.apply(frame("session.status", { sessionID: "working", status: BridgeStatus.BUSY }));
+	registry.apply(frame("session.error", { sessionID: "failing" }));
+	clock.advance(ERROR_INDICATION_DURATION_MS);
+	assert.equal(registry.status, "BUSY");
+	registry.apply(frame("session.idle", { sessionID: "working" }));
+	assert.equal(registry.status, "READY");
+
+	attention.connect(INSTANCE);
+	attention.apply(frame("session.status", { sessionID: "failing", status: BridgeStatus.BUSY }));
+	attention.apply(frame("permission.asked", { permissionID: "permission", sessionID: "failing" }));
+	attention.apply(frame("question.asked", { questionID: "question", sessionID: "failing" }));
+	attention.apply(frame("session.error", { sessionID: "failing" }));
+	assert.equal(attention.status, "ATTENTION");
+	attention.apply(frame("permission.replied", { permissionID: "permission" }));
+	assert.equal(attention.status, "ATTENTION");
+	attention.apply(frame("question.resolved", { questionID: "question" }));
+	// Resolving a request does not clear the transient indication; it expires.
+	assert.equal(attention.status, "ERROR");
+	attentionClock.advance(ERROR_INDICATION_DURATION_MS);
+	assert.equal(attention.status, "READY");
+});
+
+test("repeated failures restart the indication and later work restores BUSY", () => {
+	const { clock, registry } = createRegistry();
+	registry.connect(INSTANCE);
+	registry.apply(frame("session.status", { sessionID: "failing", status: BridgeStatus.BUSY }));
+	registry.apply(frame("session.error", { sessionID: "failing" }));
+	clock.advance(ERROR_INDICATION_DURATION_MS - 1);
+	registry.apply(frame("session.error", { sessionID: "failing" }));
+	clock.advance(ERROR_INDICATION_DURATION_MS - 1);
+	assert.equal(registry.status, "ERROR");
+	clock.advance(1);
+	assert.equal(registry.status, "READY");
+
+	registry.apply(frame("session.status", { sessionID: "failing", status: BridgeStatus.BUSY }));
+	assert.equal(registry.status, "BUSY");
+	registry.apply(frame("session.error", { sessionID: "failing" }));
+	registry.disconnect(INSTANCE);
+	assert.equal(registry.status, "OFFLINE");
+	assert.equal(clock.timerCount, 0);
+});
+
 test("new local BUSY and READY session events replace an error indication", () => {
 	for (const [type, properties, expected] of [
 		["session.status", { sessionID: "working", status: BridgeStatus.BUSY }, "BUSY"],
@@ -219,11 +282,12 @@ test("single-instance multi-session transitions and precedence are immediate wit
 	assert.equal(clock.timerCount, 0);
 	apply("session.error", { sessionID: "two" });
 	clock.advance(ERROR_INDICATION_DURATION_MS);
-	assert.equal(statuses.at(-1), "BUSY");
+	// The failed session no longer contributes BUSY, so no idle event is needed.
+	assert.equal(statuses.at(-1), "READY");
 	apply("session.idle", { sessionID: "two" });
 	assert.equal(statuses.at(-1), "READY");
 	registry.disconnect(INSTANCE);
 	assert.equal(statuses.at(-1), "OFFLINE");
 	assert.equal(clock.timerCount, 0);
-	assert.deepEqual(statuses, ["OFFLINE", "READY", "BUSY", "ATTENTION", "BUSY", "ERROR", "BUSY", "ERROR", "BUSY", "READY", "OFFLINE"]);
+	assert.deepEqual(statuses, ["OFFLINE", "READY", "BUSY", "ATTENTION", "BUSY", "ERROR", "BUSY", "ERROR", "READY", "OFFLINE"]);
 });
