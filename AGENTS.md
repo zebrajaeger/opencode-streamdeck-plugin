@@ -14,7 +14,10 @@ Dies gilt ausschließlich für Änderungen, die du in dem opencode-streamdeck-pl
 ## Openspec archive
 - Bevor du `openspec archive` ausführst, sync these delta specs into the main OpenSpec specifications before archiving.
 - Danach ein `gitnexus analyze`, um den Index zu aktualisieren.
-- Danach ein git commit und git push, um die Änderungen zu sichern.
+- Danach ein git commit und git push, um die Änderungen zu sichern. Für die commit message siehe unten.
+
+## Commit Message
+- Schema für OpenSpec Implementierung: `[fix|feature|<oder was am besten passt>]: [<OpenSpec change name>] <Beschreibung>` 
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
