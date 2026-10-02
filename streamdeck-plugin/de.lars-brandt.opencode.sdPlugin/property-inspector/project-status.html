@@ -12,6 +12,17 @@
 		<option value="">No known projects yet</option>
 	</select>
 	<p id="project-detail">Connect OpenCode to a project to select it here. The key stays OFFLINE until its configured project connects.</p>
+	<label for="project-name">Project name</label>
+	<input id="project-name" type="text" autocomplete="off" placeholder="Optional display name">
+	<p>Use Project name instead of the native Stream Deck title. Name and status are drawn together on this key.</p>
+	<label for="name-position">Name position</label>
+	<select id="name-position">
+		<option value="top">Top</option><option value="middle" disabled>Middle</option><option value="bottom" selected>Bottom</option>
+	</select>
+	<label for="status-position">Status position</label>
+	<select id="status-position">
+		<option value="top">Top</option><option value="middle" selected>Middle</option><option value="bottom" disabled>Bottom</option>
+	</select>
 	<details>
 		<summary>Advanced: enter a project ID</summary>
 		<label for="project-id">OpenCode project ID</label>

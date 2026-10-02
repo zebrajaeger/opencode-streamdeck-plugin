@@ -1,4 +1,6 @@
 import type { GlobalStatusValue } from "../status-types";
+import { normalizeProjectPresentation, type ProjectPresentation } from "../../de.lars-brandt.opencode.sdPlugin/property-inspector/project-presentation.mjs";
+import { projectStatusImage } from "./project-status-image.mjs";
 
 export const PARTICLE_WAIT_ANIMATION = {
 	backgroundColor: "#101216",
@@ -145,7 +147,12 @@ export class StatusActionRenderer {
 	private readonly animations = new Map<StatusKey, ParticleWaitAnimation>();
 	private readonly presentations = new Map<StatusKey, KeyPresentation>();
 	private readonly writes = new Map<string, Promise<void>>();
+	private readonly projectPresentations = new Map<string, ProjectPresentation>();
 	private status: GlobalStatusValue = "OFFLINE";
+
+	configureProject(actionID: string, settings: Partial<ProjectPresentation>): void {
+		this.projectPresentations.set(actionID, normalizeProjectPresentation(settings));
+	}
 
 	setStatus(status: GlobalStatusValue, actions: Iterable<StatusKey>): void {
 		this.status = status;
@@ -161,6 +168,7 @@ export class StatusActionRenderer {
 	}
 
 	async dispose(actionID: string): Promise<void> {
+		this.projectPresentations.delete(actionID);
 		const actions = [...this.presentations.keys()].filter((key) => key.id === actionID);
 		const pending = actions.map((action) => {
 			this.presentations.delete(action);
@@ -190,25 +198,31 @@ export class StatusActionRenderer {
 		state.status = status;
 		state.completed = undefined;
 		const current = () => this.presentations.get(action) === state && state.version === version;
+		const project = this.projectPresentations.get(action.id);
+		const compose = (image: string) => project ? projectStatusImage(image, status, project) : image;
 		// Cancel animation immediately; drain its pending frames before static writes.
-		const stopped = status === "BUSY" ? Promise.resolve() : this.animations.get(action)?.stop();
+		const replaceAnimation = !!project && refresh;
+		const stopped = status !== "BUSY" || replaceAnimation ? this.animations.get(action)?.stop() : Promise.resolve();
+		if (replaceAnimation) this.animations.delete(action);
 		const pending = (async () => {
-			await this.write(action, current, () => action.setTitle(status));
+			if (!project) await this.write(action, current, () => action.setTitle(status));
 			if (!current()) return;
 			if (status === "BUSY") {
+				await stopped;
+				if (!current()) return;
 				let animation = this.animations.get(action);
 				if (!animation) {
 					animation = new ParticleWaitAnimation({
 						setImage: (image) => this.write(action,
-							() => this.presentations.get(action) === state && state.status === "BUSY",
-							() => action.setImage(image)),
+							() => this.presentations.get(action) === state && state.status === "BUSY" && (!project || current()),
+							() => action.setImage(compose(image!))),
 					});
 					this.animations.set(action, animation);
 				}
 				animation.start();
 			} else {
 				await stopped;
-				await this.write(action, current, () => action.setImage(statusImage(status)));
+				await this.write(action, current, () => action.setImage(compose(statusImage(status))));
 			}
 			if (current()) state.completed = status;
 		})();

@@ -1,3 +1,5 @@
+import { normalizeProjectPresentation } from "./project-presentation.mjs";
+
 export function projectBasename(directory) {
 	return directory.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean).at(-1) || directory;
 }
@@ -12,8 +14,8 @@ export function projectOptions(projects) {
 	}));
 }
 
-export function projectSettings(projectID) {
-	return { projectID };
+export function projectSettings(projectID, settings = {}) {
+	return { ...settings, projectID };
 }
 
 export function knownProjectsFromGlobalSettings(settings) {
@@ -38,16 +40,32 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	const projectSelect = document.querySelector("#project-select");
 	const projectID = document.querySelector("#project-id");
 	const projectDetail = document.querySelector("#project-detail");
+	const projectName = document.querySelector("#project-name");
+	const namePosition = document.querySelector("#name-position");
+	const statusPosition = document.querySelector("#status-position");
 	const connection = inspectorRegistration(port, uuid, registerEvent, actionInfo);
 	const websocket = new WebSocket(connection.url);
 	const context = connection.context;
 	let knownProjects = [];
 	let selectedProjectID = "";
+	let settings = JSON.parse(actionInfo || "{}").payload?.settings ?? {};
+	selectedProjectID = settings.projectID ?? "";
 
-	function save(projectID) {
-		selectedProjectID = projectID;
-		websocket.send(JSON.stringify({ event: "setSettings", context, payload: projectSettings(projectID) }));
+	function save(changes) {
+		settings = { ...settings, ...normalizeProjectPresentation({ ...settings, ...changes }), ...changes };
+		selectedProjectID = settings.projectID ?? "";
+		websocket.send(JSON.stringify({ event: "setSettings", context, payload: settings }));
 		renderProjects();
+		renderPresentation();
+	}
+
+	function renderPresentation() {
+		const presentation = normalizeProjectPresentation(settings);
+		projectName.value = presentation.projectName;
+		namePosition.value = presentation.namePosition;
+		statusPosition.value = presentation.statusPosition;
+		for (const option of namePosition.options) option.disabled = option.value === presentation.statusPosition;
+		for (const option of statusPosition.options) option.disabled = option.value === presentation.namePosition;
 	}
 
 	function renderProjects() {
@@ -74,8 +92,10 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	websocket.addEventListener("message", ({ data }) => {
 		const message = JSON.parse(data);
 		if (message.event === "didReceiveSettings") {
-			selectedProjectID = message.payload.settings.projectID ?? "";
+			settings = message.payload.settings;
+			selectedProjectID = settings.projectID ?? "";
 			renderProjects();
+			renderPresentation();
 		}
 		if (message.event === "didReceiveGlobalSettings") {
 			knownProjects = mergeKnownProjects(knownProjectsFromGlobalSettings(message.payload?.settings), knownProjects);
@@ -92,8 +112,13 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 		websocket.send(JSON.stringify({ event: "getSettings", context }));
 		websocket.send(JSON.stringify({ event: "getGlobalSettings", context: uuid }));
 	});
-	projectSelect.addEventListener("change", () => save(projectSelect.value));
-	projectID.addEventListener("change", () => save(projectID.value));
+	projectSelect.addEventListener("change", () => save(projectSettings(projectSelect.value, settings)));
+	projectID.addEventListener("change", () => save(projectSettings(projectID.value, settings)));
+	projectName.addEventListener("change", () => save({ projectName: projectName.value }));
+	namePosition.addEventListener("change", () => save({ namePosition: namePosition.value }));
+	statusPosition.addEventListener("change", () => save({ statusPosition: statusPosition.value }));
+	renderProjects();
+	renderPresentation();
 }
 
 export function connectElgatoStreamDeckSocket(port, uuid, registerEvent, _info, actionInfo) {

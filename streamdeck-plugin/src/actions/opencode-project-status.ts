@@ -6,9 +6,13 @@ import type { KnownProject } from "../known-projects";
 import { StatusActionRenderer } from "./particle-wait-animation";
 import { ProjectSelector } from "./project-selector";
 import { ProjectStatusSubscriptions } from "./project-status-subscriptions";
+import type { TextPosition } from "../../de.lars-brandt.opencode.sdPlugin/property-inspector/project-presentation.mjs";
 
 export interface ProjectStatusSettings extends JsonObject {
 	projectID?: string;
+	projectName?: string;
+	namePosition?: TextPosition;
+	statusPosition?: TextPosition;
 }
 
 /** A display-only status view scoped to the OpenCode project chosen for each key. */
@@ -40,11 +44,13 @@ export class OpenCodeProjectStatus extends SingletonAction<ProjectStatusSettings
 
 	override async onWillAppear(event: WillAppearEvent<ProjectStatusSettings>): Promise<void> {
 		if (!event.action.isKey()) return;
+		this.renderer.configureProject(event.action.id, event.payload.settings);
 		this.projectSubscriptions.update(event.action.id, event.payload.settings.projectID);
 		await this.renderer.renderStatus(event.action, this.statuses.get(event.action.id) ?? "OFFLINE");
 	}
 
 	override async onDidReceiveSettings(event: DidReceiveSettingsEvent<ProjectStatusSettings>): Promise<void> {
+		this.renderer.configureProject(event.action.id, event.payload.settings);
 		this.projectSubscriptions.update(event.action.id, event.payload.settings.projectID);
 		if (event.action.isKey()) await this.renderer.renderStatus(event.action, this.statuses.get(event.action.id) ?? "OFFLINE");
 		await this.projectSelector.updateSettings(event.action.id, event.payload.settings.projectID);

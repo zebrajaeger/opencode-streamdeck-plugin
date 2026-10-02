@@ -24,13 +24,14 @@
 			"Icon": "imgs/plugin/category-icon",
 			"Tooltip": "Displays the status of one configured local OpenCode project.",
 			"PropertyInspectorPath": "property-inspector/project-status.html",
+			"UserTitleEnabled": false,
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
 					"Image": "imgs/plugin/category-icon",
-					"TitleAlignment": "middle"
+					"ShowTitle": false
 				}
 			]
 		}
