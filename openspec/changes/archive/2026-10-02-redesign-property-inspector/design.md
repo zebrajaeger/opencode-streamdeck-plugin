@@ -37,7 +37,8 @@ The disclosure arrow, keyboard activation and expanded/collapsed semantics come 
 Shape: `{ sections: { "<section-id>": boolean } }`, written through the same `save()` path. Unknown or missing ids fall back to the section's default, so adding or renaming a section later degrades gracefully. The runtime ignores the field; `normalizeProjectPresentation` is not extended, because this is dialog state, not key presentation. Persisting per action (not globally) follows the user's choice.
 
 **Sections and groups for this action:**
-- `Project` (expanded by default): divider `Source` → project selector + detail line; divider `Advanced` → manual project ID.
+- `Project` (expanded by default): divider `Source` → project selector + detail line.
+- `Advanced` (collapsed by default): manual project ID.
 - `Display` (expanded by default): divider `Name` → project name, name position, name font size; divider `Status` → status position, status font size.
 
 **Divider rule is one CSS class.**

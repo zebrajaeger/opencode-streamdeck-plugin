@@ -4,35 +4,50 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>OpenCode Project Status</title>
-	<style>body { font: 14px system-ui, sans-serif; margin: 16px; } label, input, select { display: block; width: 100%; } input, select { box-sizing: border-box; margin-top: 6px; } p { color: #666; line-height: 1.4; } details { margin-top: 18px; } details label { margin-top: 12px; }</style>
+	<script src="vendor/sdpi-components.js"></script>
+	<link rel="stylesheet" href="dialog.css">
 </head>
 <body>
-	<label for="project-select">OpenCode project</label>
-	<select id="project-select" disabled>
-		<option value="">No known projects yet</option>
-	</select>
-	<p id="project-detail">Connect OpenCode to a project to select it here. The key stays OFFLINE until its configured project connects.</p>
-	<label for="project-name">Project name</label>
-	<input id="project-name" type="text" autocomplete="off" placeholder="Optional display name">
-	<p>Use Project name instead of the native Stream Deck title. Name and status are drawn together on this key.</p>
-	<label for="name-font-size">Name font size</label>
-	<select id="name-font-size"></select>
-	<label for="name-position">Name position</label>
-	<select id="name-position">
-		<option value="top">Top</option><option value="middle" disabled>Middle</option><option value="bottom" selected>Bottom</option>
-	</select>
-	<label for="status-font-size">Status font size</label>
-	<select id="status-font-size"></select>
-	<p>Font sizes stay fixed. Text that does not fit is shortened with ….</p>
-	<label for="status-position">Status position</label>
-	<select id="status-position">
-		<option value="top">Top</option><option value="middle" selected>Middle</option><option value="bottom" disabled>Bottom</option>
-	</select>
-	<details>
-		<summary>Advanced: enter a project ID</summary>
-		<label for="project-id">OpenCode project ID</label>
-		<input id="project-id" type="text" autocomplete="off" placeholder="Project ID">
-		<p>Use this only for a project that has not yet connected to the status bridge.</p>
+	<details class="sdpi-section" id="section-project" open>
+		<summary>Project</summary>
+		<div class="sdpi-rows">
+			<div class="sdpi-group-title">Source</div>
+			<div class="sdpi-row"><label class="sdpi-label" for="project-select">OpenCode project</label><div class="sdpi-control">
+				<sdpi-select id="project-select" disabled><option value="">No known projects yet</option></sdpi-select>
+				<p class="sdpi-detail" id="project-detail">Connect OpenCode to a project to select it here. The key stays OFFLINE until its configured project connects.</p>
+			</div></div>
+		</div>
+	</details>
+	<details class="sdpi-section" id="section-advanced">
+		<summary>Advanced</summary>
+		<div class="sdpi-rows">
+			<div class="sdpi-row"><label class="sdpi-label" for="project-id">OpenCode project ID</label><div class="sdpi-control">
+				<sdpi-textfield id="project-id" placeholder="Project ID"></sdpi-textfield>
+				<p class="sdpi-detail">Use this only for a project that has not yet connected to the status bridge.</p>
+			</div></div>
+		</div>
+	</details>
+	<details class="sdpi-section" id="section-display" open>
+		<summary>Display</summary>
+		<div class="sdpi-rows">
+			<div class="sdpi-group-title">Name</div>
+			<div class="sdpi-row"><label class="sdpi-label" for="project-name">Project name</label><div class="sdpi-control">
+				<sdpi-textfield id="project-name" placeholder="Optional display name"></sdpi-textfield>
+				<p class="sdpi-detail">Use Project name instead of the native Stream Deck title. Name and status are drawn together on this key.</p>
+			</div></div>
+			<div class="sdpi-row"><label class="sdpi-label" for="name-position">Name position</label><div class="sdpi-control">
+				<sdpi-select id="name-position"><option value="top">Top</option><option value="middle" disabled>Middle</option><option value="bottom">Bottom</option></sdpi-select>
+			</div></div>
+			<div class="sdpi-row"><label class="sdpi-label" for="name-font-size">Name font size</label><div class="sdpi-control"><sdpi-select id="name-font-size"></sdpi-select></div></div>
+			<div class="sdpi-group-title">Status</div>
+			<div class="sdpi-row"><label class="sdpi-label" for="status-position">Status position</label><div class="sdpi-control">
+				<sdpi-select id="status-position"><option value="top">Top</option><option value="middle">Middle</option><option value="bottom" disabled>Bottom</option></sdpi-select>
+			</div></div>
+			<div class="sdpi-row"><label class="sdpi-label" for="status-font-size">Status font size</label><div class="sdpi-control">
+				<sdpi-select id="status-font-size"></sdpi-select>
+				<p class="sdpi-detail">Font sizes stay fixed. Text that does not fit is shortened with ….</p>
+			</div></div>
+		</div>
 	</details>
 	<script type="module" src="project-status-inspector.mjs"></script>
 </body>

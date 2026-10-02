@@ -6,10 +6,11 @@ import { normalizeProjectPresentation, TEXT_POSITIONS } from "../de.lars-brandt.
 
 function inspector(settings = {}) {
 	const elements = new Map();
-	const element = () => ({ value: "", options: [], listeners: {}, addEventListener(name, listener) { this.listeners[name] = listener; }, replaceChildren() { this.options = []; }, append(option) { this.options.push(option); }, change(value) { this.value = value; this.listeners.change(); } });
+	const element = () => ({ value: "", options: [], listeners: {}, addEventListener(name, listener) { this.listeners[name] = listener; }, querySelectorAll(selector) { return selector === "option" ? this.options : []; }, replaceChildren() { this.options = []; }, append(option) { this.options.push(option); }, change(value) { this.value = value; this.listeners.valuechange(); } });
 	for (const id of ["project-select", "project-id", "project-detail", "project-name", "name-position", "status-position", "name-font-size", "status-font-size"]) elements.set(`#${id}`, element());
 	for (const id of ["name-position", "status-position"]) elements.get(`#${id}`).options = TEXT_POSITIONS.map((value) => ({ value }));
-	globalThis.document = { querySelector: (selector) => elements.get(selector), createElement: element };
+	const sections = ["project", "advanced", "display"].map((id) => ({ id: `section-${id}`, open: id !== "advanced", listeners: {}, addEventListener(name, listener) { this.listeners[name] = listener; } }));
+	globalThis.document = { querySelector: (selector) => elements.get(selector), querySelectorAll: (selector) => selector === ".sdpi-section" ? sections : [], createElement: element };
 	let socket;
 	globalThis.WebSocket = class {
 		listeners = {}; sent = [];
@@ -19,8 +20,26 @@ function inspector(settings = {}) {
 		message(message) { this.listeners.message({ data: JSON.stringify(message) }); }
 	};
 	connectElgatoStreamDeckSocket("1234", "inspector", "registerPropertyInspector", "{}", JSON.stringify({ payload: { settings } }));
-	return { elements, socket, saved: () => socket.sent.filter(({ event }) => event === "setSettings").at(-1)?.payload };
+	return { elements, sections, socket, saved: () => socket.sent.filter(({ event }) => event === "setSettings").at(-1)?.payload };
 }
+
+test("section collapse persists once, does not change existing settings, and restores on reopening", async () => {
+	const original = { projectID: "before", projectName: "Existing", extra: 42 };
+	const { sections, socket, saved } = inspector(original);
+	const advanced = sections.find(({ id }) => id === "section-advanced");
+	const project = sections.find(({ id }) => id === "section-project");
+	assert.equal(advanced.open, false);
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	project.open = false;
+	project.listeners.toggle();
+	assert.equal(socket.sent.filter(({ event }) => event === "setSettings").length, 1);
+	assert.equal(saved().projectID, original.projectID);
+	assert.equal(saved().projectName, original.projectName);
+	assert.equal(saved().extra, original.extra);
+	assert.deepEqual(saved().sections, { project: false });
+	const restored = inspector(saved());
+	assert.deepEqual(restored.sections.map(({ open }) => open), [false, false, true]);
+});
 
 test("inspector defaults and occupied choices match runtime for blank names and all valid pairs", () => {
 	const initial = inspector();
@@ -64,7 +83,7 @@ test("known/manual project selection and presentation edits preserve all setting
 
 test("dedicated name instructions and controls are visible outside the advanced section", async () => {
 	const html = await readFile(new URL("../de.lars-brandt.opencode.sdPlugin/property-inspector/project-status.html", import.meta.url), "utf8");
-	const visible = html.split("<details>")[0];
+	const visible = html.split('id="section-advanced"')[0] + html.split('id="section-display"')[1];
 	for (const id of ["project-name", "name-position", "status-position", "name-font-size", "status-font-size"]) assert.ok(visible.includes(`id="${id}"`));
 	assert.match(visible, /Use Project name instead of the native Stream Deck title/);
 });

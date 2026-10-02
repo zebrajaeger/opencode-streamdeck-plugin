@@ -36,6 +36,17 @@ export function inspectorRegistration(port, uuid, registerEvent, actionInfo) {
 	};
 }
 
+export function sectionStates(settings, defaults = { project: true, advanced: false, display: true }) {
+	const stored = settings?.sections;
+	return Object.fromEntries(Object.entries(defaults).map(([id, defaultOpen]) => [
+		id, typeof stored?.[id] === "boolean" ? stored[id] : defaultOpen,
+	]));
+}
+
+export function sectionSettings(settings, id, open) {
+	return { ...settings, sections: { ...settings?.sections, [id]: open } };
+}
+
 function setupInspector(port, uuid, registerEvent, actionInfo) {
 	const projectSelect = document.querySelector("#project-select");
 	const projectID = document.querySelector("#project-id");
@@ -45,6 +56,14 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	const statusPosition = document.querySelector("#status-position");
 	const nameFontSize = document.querySelector("#name-font-size");
 	const statusFontSize = document.querySelector("#status-font-size");
+	let rendering = false;
+	const update = (callback) => {
+		rendering = true;
+		try { callback(); } finally { rendering = false; }
+	};
+	const onChange = (control, callback) => control.addEventListener("valuechange", () => {
+		if (!rendering) callback();
+	});
 	for (const select of [nameFontSize, statusFontSize]) {
 		for (const size of FONT_SIZES) {
 			const option = document.createElement("option");
@@ -60,6 +79,21 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	let selectedProjectID = "";
 	let settings = JSON.parse(actionInfo || "{}").payload?.settings ?? {};
 	selectedProjectID = settings.projectID ?? "";
+	const sections = Object.fromEntries([...document.querySelectorAll(".sdpi-section")].map((section) => [
+		section.id.slice("section-".length), section,
+	]));
+	const defaults = Object.fromEntries(Object.entries(sections).map(([id, section]) => [id, section.open]));
+	let restoringSections = false;
+	function renderSections() {
+		restoringSections = true;
+		try {
+			const states = sectionStates(settings, defaults);
+			for (const [id, section] of Object.entries(sections)) section.open = states[id];
+		} finally {
+			// <details> toggle is queued asynchronously after changing `open`.
+			setTimeout(() => { restoringSections = false; }, 0);
+		}
+	}
 
 	function save(changes) {
 		settings = { ...settings, ...normalizeProjectPresentation({ ...settings, ...changes }), ...changes };
@@ -71,13 +105,15 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 
 	function renderPresentation() {
 		const presentation = normalizeProjectPresentation(settings);
-		projectName.value = presentation.projectName;
-		namePosition.value = presentation.namePosition;
-		statusPosition.value = presentation.statusPosition;
-		nameFontSize.value = String(presentation.nameFontSize);
-		statusFontSize.value = String(presentation.statusFontSize);
-		for (const option of namePosition.options) option.disabled = option.value === presentation.statusPosition;
-		for (const option of statusPosition.options) option.disabled = option.value === presentation.namePosition;
+		update(() => {
+			projectName.value = presentation.projectName;
+			namePosition.value = presentation.namePosition;
+			statusPosition.value = presentation.statusPosition;
+			nameFontSize.value = String(presentation.nameFontSize);
+			statusFontSize.value = String(presentation.statusFontSize);
+			for (const option of namePosition.querySelectorAll("option")) option.disabled = option.value === presentation.statusPosition;
+			for (const option of statusPosition.querySelectorAll("option")) option.disabled = option.value === presentation.namePosition;
+		});
 	}
 
 	function renderProjects() {
@@ -95,8 +131,10 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 			projectSelect.append(option);
 		}
 		projectSelect.disabled = options.length === 0;
-		projectSelect.value = options.some((project) => project.projectID === selectedProjectID) ? selectedProjectID : "";
-		projectID.value = selectedProjectID;
+		update(() => {
+			projectSelect.value = options.some((project) => project.projectID === selectedProjectID) ? selectedProjectID : "";
+			projectID.value = selectedProjectID;
+		});
 		const selected = options.find((project) => project.projectID === selectedProjectID);
 		projectDetail.textContent = selected ? selected.directory : "Connect OpenCode to a project to select it here. The key stays OFFLINE until its configured project connects.";
 	}
@@ -108,6 +146,7 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 			selectedProjectID = settings.projectID ?? "";
 			renderProjects();
 			renderPresentation();
+			renderSections();
 		}
 		if (message.event === "didReceiveGlobalSettings") {
 			knownProjects = mergeKnownProjects(knownProjectsFromGlobalSettings(message.payload?.settings), knownProjects);
@@ -124,15 +163,23 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 		websocket.send(JSON.stringify({ event: "getSettings", context }));
 		websocket.send(JSON.stringify({ event: "getGlobalSettings", context: uuid }));
 	});
-	projectSelect.addEventListener("change", () => save(projectSettings(projectSelect.value, settings)));
-	projectID.addEventListener("change", () => save(projectSettings(projectID.value, settings)));
-	projectName.addEventListener("change", () => save({ projectName: projectName.value }));
-	namePosition.addEventListener("change", () => save({ namePosition: namePosition.value }));
-	statusPosition.addEventListener("change", () => save({ statusPosition: statusPosition.value }));
-	nameFontSize.addEventListener("change", () => save({ nameFontSize: Number(nameFontSize.value) }));
-	statusFontSize.addEventListener("change", () => save({ statusFontSize: Number(statusFontSize.value) }));
+	onChange(projectSelect, () => save(projectSettings(projectSelect.value, settings)));
+	onChange(projectID, () => save(projectSettings(projectID.value, settings)));
+	onChange(projectName, () => save({ projectName: projectName.value }));
+	onChange(namePosition, () => save({ namePosition: namePosition.value }));
+	onChange(statusPosition, () => save({ statusPosition: statusPosition.value }));
+	onChange(nameFontSize, () => save({ nameFontSize: Number(nameFontSize.value) }));
+	onChange(statusFontSize, () => save({ statusFontSize: Number(statusFontSize.value) }));
+	for (const [id, section] of Object.entries(sections)) {
+		section.addEventListener("toggle", () => {
+			if (!restoringSections && section.open !== sectionStates(settings, defaults)[id]) {
+				save(sectionSettings(settings, id, section.open));
+			}
+		});
+	}
 	renderProjects();
 	renderPresentation();
+	renderSections();
 }
 
 export function connectElgatoStreamDeckSocket(port, uuid, registerEvent, _info, actionInfo) {
