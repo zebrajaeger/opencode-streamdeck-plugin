@@ -1,15 +1,24 @@
 import { normalizeProjectPresentation } from "./project-presentation.mjs";
 import { setupFontDialog } from "./font-dialog.mjs";
+import { READY_BACKGROUNDS, normalizeReadyBackground } from "./ready-background.mjs";
 
 export function connectElgatoStreamDeckSocket(port, uuid, registerEvent, _info, actionInfo) {
 	const trigger = document.querySelector("#status-font");
 	const display = document.querySelector("#section-display");
+	const readyBackground = document.querySelector("#ready-background");
+	for (const choice of READY_BACKGROUNDS) {
+		const option = document.createElement("option");
+		option.value = choice.value;
+		option.textContent = choice.label;
+		readyBackground.append(option);
+	}
 	const socket = new WebSocket(`ws://127.0.0.1:${port}`);
 	let settings = JSON.parse(actionInfo || "{}").payload?.settings ?? {};
 	let restoring = false;
 	function render() {
 		const presentation = normalizeProjectPresentation(settings);
 		trigger.textContent = `${presentation.statusFontFamily} · ${presentation.statusFontSize} px · ${presentation.statusFontStyle}`;
+		readyBackground.value = normalizeReadyBackground(settings.readyBackground);
 		restoring = true;
 		display.open = typeof settings.sections?.display === "boolean" ? settings.sections.display : true;
 		setTimeout(() => { restoring = false; }, 0);
@@ -20,6 +29,7 @@ export function connectElgatoStreamDeckSocket(port, uuid, registerEvent, _info, 
 		render();
 	}
 	setupFontDialog({ status: trigger }, () => settings, save);
+	readyBackground.addEventListener("change", () => save({ readyBackground: normalizeReadyBackground(readyBackground.value) }));
 	display.addEventListener("toggle", () => {
 		if (!restoring && display.open !== (typeof settings.sections?.display === "boolean" ? settings.sections.display : true)) {
 			save({ sections: { ...settings.sections, display: display.open } });

@@ -1,0 +1,9 @@
+export const READY_BACKGROUNDS = Object.freeze([
+	{ value: "plasma", label: "Plasma" },
+	{ value: "attention", label: "Attention halo" },
+	{ value: "particle", label: "Particles" },
+]);
+
+export function normalizeReadyBackground(value) {
+	return typeof value === "string" && READY_BACKGROUNDS.some((choice) => choice.value === value) ? value : "plasma";
+}

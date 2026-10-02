@@ -6,7 +6,7 @@ import { connectElgatoStreamDeckSocket } from "../de.lars-brandt.opencode.sdPlug
 function inspector(settings = {}) {
 	const elements = new Map();
 	const element = () => ({ value: "", listeners: {}, options: [], addEventListener(name, fn) { this.listeners[name] = fn; }, append(option) { this.options.push(option); }, click() { this.listeners.click?.(); }, focus() { this.focused = true; } });
-	for (const id of ["status-font", "section-display", "font-dialog", "font-form", "font-dialog-title", "font-family", "font-size", "font-size-value", "font-style", "font-underline", "font-color", "font-cancel"]) elements.set(`#${id}`, element());
+	for (const id of ["ready-background", "status-font", "section-display", "font-dialog", "font-form", "font-dialog-title", "font-family", "font-size", "font-size-value", "font-style", "font-underline", "font-color", "font-cancel"]) elements.set(`#${id}`, element());
 	const dialog = elements.get("#font-dialog");
 	dialog.showModal = () => { dialog.open = true; };
 	dialog.close = () => { dialog.open = false; dialog.listeners.close(); };
@@ -85,4 +85,33 @@ test("global status font accepts the new 10 px minimum and restores it", () => {
 	({ elements } = inspector(saved()));
 	elements.get("#status-font").click();
 	assert.equal(elements.get("#font-size").value, "10");
+});
+
+test("global READY selector restores, normalizes, and preserves font, sections and unknown settings", () => {
+	let { elements, socket, saved } = inspector({ statusFontSize: 23, sections: { display: false }, extra: 7 });
+	const select = elements.get("#ready-background");
+	assert.deepEqual(select.options.map(({ value }) => value), ["plasma", "attention", "particle"]);
+	assert.equal(select.value, "plasma"); assert.equal(saved(), undefined);
+	for (const value of ["attention", "particle", "plasma"]) {
+		select.value = value; select.listeners.change();
+		assert.equal(saved().readyBackground, value);
+		assert.equal(saved().statusFontSize, 23); assert.deepEqual(saved().sections, { display: false }); assert.equal(saved().extra, 7);
+	}
+	select.value = "particle"; select.listeners.change();
+	({ elements, socket, saved } = inspector(saved()));
+	assert.equal(elements.get("#ready-background").value, "particle"); assert.equal(saved(), undefined);
+	socket.message({ event: "didReceiveSettings", payload: { settings: { readyBackground: "invalid", statusFontSize: 28 } } });
+	assert.equal(elements.get("#ready-background").value, "plasma"); assert.equal(saved(), undefined);
+});
+
+test("global font Apply and Cancel retain a saved READY background", () => {
+	const { elements, saved } = inspector({ readyBackground: "attention", sections: { display: true }, extra: "keep" });
+	elements.get("#status-font").click(); elements.get("#font-cancel").click();
+	assert.equal(saved(), undefined);
+	elements.get("#status-font").click(); elements.get("#font-size").value = "22";
+	elements.get("#font-form").listeners.submit({ preventDefault() {} });
+	assert.equal(saved().readyBackground, "attention");
+	assert.equal(saved().statusFontSize, 22);
+	assert.deepEqual(saved().sections, { display: true });
+	assert.equal(saved().extra, "keep");
 });

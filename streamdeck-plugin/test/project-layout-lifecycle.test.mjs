@@ -63,3 +63,22 @@ test("action lifecycle restores per-key presentation and updates project subscri
 	await flush();
 	assert.deepEqual(keys.map((key) => key.images.length), counts);
 });
+
+test("project READY key applies selection at appearance, changes without status reports, and restores on reappearance", async (t) => {
+	t.mock.timers.enable({ apis: ["setInterval"] });
+	const action = new OpenCodeProjectStatus();
+	const key = { id: "ready-project", images: [], titles: [], isKey: () => true, async setImage(image) { this.images.push(image); }, async setTitle(title) { this.titles.push(title); } };
+	Object.defineProperty(action, "actions", { value: [key] });
+	action.setProjectSubscriber((_id, listener) => { listener("READY"); return () => true; });
+	const event = (settings) => ({ action: key, payload: { settings } });
+	const settings = { projectID: "project-a", projectName: "Alpha", readyBackground: "particle" };
+	await action.onWillAppear(event(settings)); await flush();
+	assert.match(decode(key.images.at(-1)), /<line /);
+	assert.match(decode(key.images.at(-1)), />READY</);
+	await action.onDidReceiveSettings(event({ ...settings, readyBackground: "attention" })); await flush();
+	assert.match(decode(key.images.at(-1)), /attention-halo/);
+	await action.onWillDisappear(event(settings));
+	await action.onWillAppear(event(settings)); await flush();
+	assert.match(decode(key.images.at(-1)), /<line /);
+	await action.onWillDisappear(event(settings));
+});

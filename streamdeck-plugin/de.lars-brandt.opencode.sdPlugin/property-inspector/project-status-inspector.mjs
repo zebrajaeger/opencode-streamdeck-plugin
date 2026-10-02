@@ -1,5 +1,6 @@
 import { normalizeProjectPresentation } from "./project-presentation.mjs";
 import { setupFontDialog } from "./font-dialog.mjs";
+import { READY_BACKGROUNDS, normalizeReadyBackground } from "./ready-background.mjs";
 
 export function projectBasename(directory) {
 	return directory.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean).at(-1) || directory;
@@ -55,6 +56,13 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	const projectName = document.querySelector("#project-name");
 	const namePosition = document.querySelector("#name-position");
 	const statusPosition = document.querySelector("#status-position");
+	const readyBackground = document.querySelector("#ready-background");
+	for (const choice of READY_BACKGROUNDS) {
+		const option = document.createElement("option");
+		option.value = choice.value;
+		option.textContent = choice.label;
+		readyBackground.append(option);
+	}
 	const triggers = { name: document.querySelector("#name-font"), status: document.querySelector("#status-font") };
 	let rendering = false;
 	const update = (callback) => {
@@ -99,6 +107,7 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	function renderPresentation() {
 		const presentation = normalizeProjectPresentation(settings);
 		update(() => {
+			readyBackground.value = normalizeReadyBackground(settings.readyBackground);
 			projectName.value = presentation.projectName;
 			namePosition.value = presentation.namePosition;
 			statusPosition.value = presentation.statusPosition;
@@ -162,6 +171,7 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	onChange(projectName, () => save({ projectName: projectName.value }));
 	onChange(namePosition, () => save({ namePosition: namePosition.value }));
 	onChange(statusPosition, () => save({ statusPosition: statusPosition.value }));
+	onChange(readyBackground, () => save({ readyBackground: normalizeReadyBackground(readyBackground.value) }));
 	setupFontDialog(triggers, () => settings, save);
 	for (const [id, section] of Object.entries(sections)) {
 		section.addEventListener("toggle", () => {

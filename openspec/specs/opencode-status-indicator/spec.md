@@ -5,7 +5,7 @@ Provide a single Stream Deck action that reliably summarizes the activity and at
 ## Requirements
 
 ### Requirement: Global OpenCode status display
-The system SHALL provide one Stream Deck action that displays a status aggregated from all connected local OpenCode instances and their current live sessions, outstanding permission requests, and any unexpired execution-failure indication. Every visible global status key whose effective status is `READY` SHALL display the continuous green plasma defined by `status-background-animation` without changing how the effective status is calculated.
+The system SHALL provide one Stream Deck action that displays a status aggregated from all connected local OpenCode instances and their current live sessions, outstanding permission requests, and any unexpired execution-failure indication. Every visible global status key whose effective status is `READY` SHALL display its independently configured READY background defined by `status-background-animation`, defaulting to continuous green plasma, without changing how the effective status is calculated.
 
 #### Scenario: No OpenCode instance is connected
 - **WHEN** no OpenCode instance has an active bridge connection
@@ -13,11 +13,15 @@ The system SHALL provide one Stream Deck action that displays a status aggregate
 
 #### Scenario: Connected instances are inactive
 - **WHEN** at least one OpenCode instance is connected and it has no working session, unanswered permission request, or unexpired failure indication
-- **THEN** the status action displays READY with continuously evolving green plasma
+- **THEN** the status action displays READY with its selected continuously animated background, using green plasma when no valid selection is saved
 
 #### Scenario: Global ready resolves into work
 - **WHEN** the global effective status changes from READY to BUSY
-- **THEN** plasma stops and BUSY particles start without changing the status aggregation rules
+- **THEN** the READY presentation is replaced by BUSY particles without changing the status aggregation rules
+
+#### Scenario: Global keys choose different READY appearances
+- **WHEN** two visible global keys choose Attention halo and Particles respectively while the aggregate is READY
+- **THEN** both show READY with their independently selected backgrounds and changing one key's selection does not restart the other
 
 ### Requirement: Activity status aggregation
 The system SHALL display `BUSY` when one or more connected OpenCode sessions are working and no higher-priority state applies. Each visible status key displaying `BUSY` SHALL present the dynamic particle-network wait animation defined by the `particle-wait-animation` capability instead of the regular static status image.

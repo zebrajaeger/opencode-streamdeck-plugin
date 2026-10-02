@@ -5,6 +5,7 @@ import { BackgroundAnimation, backgroundImage, type BackgroundAnimationOptions }
 import { ParticleWaitAnimation } from "./particle-wait-animation.ts";
 import { AttentionHaloAnimation, ATTENTION_HALO_ANIMATION } from "./attention-halo-animation.ts";
 import { ReadyPlasmaAnimation, READY_PLASMA_ANIMATION } from "./ready-plasma-animation.ts";
+import { normalizeReadyBackground, type ReadyBackground } from "../../de.lars-brandt.opencode.sdPlugin/property-inspector/ready-background.mjs";
 
 export interface StatusKey {
 	readonly id: string;
@@ -16,12 +17,14 @@ interface KeyPresentation {
 	version: number;
 	status?: GlobalStatusValue;
 	completed?: GlobalStatusValue;
+	effect?: ReadyBackground;
 	title?: GlobalStatusValue;
 	pending?: Promise<void>;
 }
 
 interface ActiveAnimation {
 	status: GlobalStatusValue;
+	effect: ReadyBackground;
 	controller: BackgroundAnimation;
 }
 
@@ -37,17 +40,20 @@ export class StatusActionRenderer {
 	private readonly writes = new Map<string, Promise<void>>();
 	private readonly projectPresentations = new Map<string, ProjectPresentation>();
 	private readonly globalPresentations = new Map<string, ProjectPresentation>();
+	private readonly readyBackgrounds = new Map<string, ReadyBackground>();
 	private status: GlobalStatusValue = "OFFLINE";
 	private readonly options: StatusActionRendererOptions;
 
 	constructor(options: StatusActionRendererOptions = {}) { this.options = options; }
 
-	configureProject(actionID: string, settings: Partial<ProjectPresentation>): void {
+	configureProject(actionID: string, settings: Partial<ProjectPresentation> & { readyBackground?: unknown }): void {
 		this.projectPresentations.set(actionID, normalizeProjectPresentation(settings));
+		this.readyBackgrounds.set(actionID, normalizeReadyBackground(settings.readyBackground));
 	}
 
-	configureGlobal(actionID: string, settings: Partial<ProjectPresentation>): void {
+	configureGlobal(actionID: string, settings: Partial<ProjectPresentation> & { readyBackground?: unknown }): void {
 		this.globalPresentations.set(actionID, normalizeProjectPresentation(settings));
+		this.readyBackgrounds.set(actionID, normalizeReadyBackground(settings.readyBackground));
 	}
 
 	setStatus(status: GlobalStatusValue, actions: Iterable<StatusKey>): void {
@@ -61,6 +67,7 @@ export class StatusActionRenderer {
 	async dispose(actionID: string): Promise<void> {
 		this.projectPresentations.delete(actionID);
 		this.globalPresentations.delete(actionID);
+		this.readyBackgrounds.delete(actionID);
 		const pending = [...this.presentations.keys()].filter((key) => key.id === actionID).map((action) => {
 			this.presentations.delete(action);
 			const animation = this.animations.get(action);
@@ -81,23 +88,25 @@ export class StatusActionRenderer {
 	}
 
 	private render(action: StatusKey, status: GlobalStatusValue, refresh = true): Promise<void> {
+		const effect: ReadyBackground | undefined = status === "BUSY" ? "particle" : status === "ATTENTION" ? "attention" : status === "READY" ? (this.readyBackgrounds.get(action.id) ?? "plasma") : undefined;
 		let presentation = this.presentations.get(action);
 		if (!presentation) {
 			presentation = { version: 0 };
 			this.presentations.set(action, presentation);
 		}
-		if (!refresh && presentation.status === status) {
+		if (!refresh && presentation.status === status && presentation.effect === effect) {
 			if (presentation.pending) return presentation.pending;
 			if (presentation.completed === status) return Promise.resolve();
 		}
 		const state = presentation;
 		const version = ++state.version;
 		state.status = status;
+		state.effect = effect;
 		state.completed = undefined;
 		const current = () => this.presentations.get(action) === state && state.version === version;
 		let animation = this.animations.get(action);
-		const stopped = animation && animation.status !== status ? animation.controller.dispose() : Promise.resolve();
-		if (animation && animation.status !== status) {
+		const stopped = animation && (animation.status !== status || animation.effect !== effect) ? animation.controller.dispose() : Promise.resolve();
+		if (animation && (animation.status !== status || animation.effect !== effect)) {
 			this.animations.delete(action);
 			animation = undefined;
 		}
@@ -107,10 +116,10 @@ export class StatusActionRenderer {
 			}
 			await stopped;
 			if (!current()) return;
-			if (status === "BUSY" || status === "ATTENTION" || status === "READY") {
+			if (effect) {
 				if (!animation) {
-					const effect = status === "BUSY" ? new ParticleWaitAnimation(this.options.random) : status === "ATTENTION" ? new AttentionHaloAnimation(this.options.now) : new ReadyPlasmaAnimation(this.options.now);
-					const active: ActiveAnimation = { status, controller: new BackgroundAnimation(effect, (background) => {
+					const renderer = effect === "particle" ? new ParticleWaitAnimation(this.options.random) : effect === "attention" ? new AttentionHaloAnimation(this.options.now) : new ReadyPlasmaAnimation(this.options.now);
+					const active: ActiveAnimation = { status, effect, controller: new BackgroundAnimation(renderer, (background) => {
 						const frameVersion = state.version;
 						return this.write(action,
 							() => this.presentations.get(action) === state && state.status === status && state.version === frameVersion && this.animations.get(action) === active,

@@ -271,3 +271,146 @@ test("rejected halo frames recover and still allow transitions and disposal", as
 	await renderer.renderStatus(action, "ERROR"); assert.match(decode(action.images.at(-1)), /#CF3D3D/);
 	await renderer.dispose(action.id); assert.equal(time.size, 0);
 });
+
+const effectPattern = { plasma: /id="ready-plasma"/, attention: /id="attention-halo"/, particle: /<line / };
+for (const mode of ["global", "project"]) for (const selection of ["plasma", "attention", "particle"]) {
+	test(`${mode} READY uses ${selection} with the original palette, timing and READY labels`, async (t) => {
+		const time = clock(), renderer = new StatusActionRenderer(time.options), action = key(`${mode}-${selection}`);
+		t.after(() => renderer.dispose(action.id));
+		const settings = { readyBackground: selection, projectName: "Alpha", namePosition: "top", statusPosition: "bottom", statusFontColor: "#FF00AA" };
+		renderer[mode === "global" ? "configureGlobal" : "configureProject"](action.id, settings);
+		await renderer.renderStatus(action, "READY"); await flush();
+		const first = decode(action.images.at(-1));
+		assert.match(first, effectPattern[selection]);
+		assert.match(first, new RegExp(selection === "plasma" ? "#2E9E5B" : selection === "attention" ? "#E69500" : "#5AA8F7"));
+		assert.match(first, /fill="#2E9E5B"/);
+		assert.match(first, mode === "global" ? />READY</ : />Alpha</);
+		if (mode === "project") assert.match(first, />READY</);
+		const before = action.images.length;
+		await time.tick(selection === "plasma" ? 150 : selection === "attention" ? 100 : 100);
+		assert.equal(action.images.length, before + 1);
+		assert.match(decode(action.images.at(-1)), effectPattern[selection]);
+		assert.equal(time.size, 1);
+	});
+}
+
+test("READY selections are per key; live switching does not restart other keys or change status", async (t) => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), a = key("global"), b = key("project");
+	t.after(async () => { await renderer.dispose(a.id); await renderer.dispose(b.id); });
+	renderer.configureGlobal(a.id, { readyBackground: "particle", statusFontSize: 23 });
+	renderer.configureProject(b.id, { readyBackground: "attention", projectName: "Beta" });
+	await renderer.renderStatus(a, "READY"); await renderer.renderStatus(b, "READY"); await flush();
+	assert.match(decode(a.images.at(-1)), /<line /);
+	assert.match(decode(b.images.at(-1)), /attention-halo/);
+	const starts = time.starts, countB = b.images.length;
+	renderer.configureGlobal(a.id, { readyBackground: "attention", statusFontSize: 23 });
+	await renderer.renderStatus(a, "READY"); await flush();
+	assert.match(decode(a.images.at(-1)), /attention-halo/);
+	assert.match(decode(a.images.at(-1)), /fill="#2E9E5B"/);
+	assert.match(decode(a.images.at(-1)), />READY</);
+	assert.equal(b.images.length, countB);
+	assert.equal(time.starts, starts + 1); assert.equal(time.size, 2);
+	assert.deepEqual(a.titles, []);
+});
+
+test("equivalent READY choices and refreshes retain phase; non-READY changes apply on next READY", async (t) => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key("project");
+	t.after(() => renderer.dispose(action.id));
+	renderer.configureProject(action.id, { readyBackground: "attention", projectName: "Old" });
+	await renderer.renderStatus(action, "READY"); await time.tick(700);
+	const opacity = decode(action.images.at(-1)).match(/ opacity="([\d.]+)"/)[1];
+	renderer.configureProject(action.id, { readyBackground: "attention", projectName: "New", namePosition: "top", statusPosition: "bottom" });
+	await renderer.renderStatus(action, "READY");
+	assert.match(decode(action.images.at(-1)), new RegExp(`opacity="${opacity}"`));
+	assert.match(decode(action.images.at(-1)), />New</);
+	renderer.setStatus("READY", [action]); await flush();
+	assert.equal(time.starts, 1);
+	await renderer.renderStatus(action, "BUSY");
+	renderer.configureProject(action.id, { readyBackground: "particle", projectName: "New" });
+	await renderer.renderStatus(action, "BUSY");
+	assert.equal(time.starts, 2);
+	await renderer.renderStatus(action, "READY"); await flush();
+	assert.match(decode(action.images.at(-1)), /<line /);
+	assert.match(decode(action.images.at(-1)), /data-label="status"[^]*>READY<\/text>/);
+	assert.equal(time.starts, 3);
+});
+
+for (const rejected of [false, true]) test(`rapid READY renderer switches survive ${rejected ? "rejected" : "resolved"} old writes`, async (t) => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key("a"), gate = deferred();
+	t.after(() => renderer.dispose(action.id));
+	renderer.configureGlobal(action.id, {});
+	renderer.setStatus("READY", [action]); await flush();
+	const original = action.setImage.bind(action); let blocked = false;
+	action.setImage = async (image) => { if (!blocked) { blocked = true; await gate.promise; } await original(image); };
+	await time.tick(150);
+	renderer.configureGlobal(action.id, { readyBackground: "attention" });
+	const halo = renderer.renderCurrentStatus(action);
+	renderer.configureGlobal(action.id, { readyBackground: "particle" });
+	const particles = renderer.renderCurrentStatus(action);
+	await flush();
+	if (rejected) gate.reject(new Error("failed")); else gate.resolve();
+	await Promise.allSettled([halo, particles]); await flush();
+	assert.match(decode(action.images.at(-1)), /<line /);
+	assert.doesNotMatch(decode(action.images.at(-1)), /attention-halo/);
+	assert.equal(time.size, 1); assert.equal(renderer.animationCount, 1);
+	await time.tick(); assert.match(decode(action.images.at(-1)), /<line /);
+});
+
+test("invalid READY settings normalize equally and disposal clears the action ID's selection", async (t) => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key("same"), fresh = key("same");
+	t.after(() => renderer.dispose(action.id));
+	renderer.configureProject(action.id, { readyBackground: "unsupported", projectName: "Alpha", namePosition: "top", statusPosition: "bottom" });
+	await renderer.renderStatus(action, "READY"); await flush();
+	const starts = time.starts;
+	renderer.configureProject(action.id, { readyBackground: {}, projectName: "Beta", namePosition: "top", statusPosition: "bottom" });
+	await renderer.renderStatus(action, "READY"); await flush();
+	assert.equal(time.starts, starts);
+	assert.match(decode(action.images.at(-1)), /ready-plasma/);
+	assert.match(decode(action.images.at(-1)), />Beta</);
+	renderer.configureProject(action.id, { readyBackground: "attention" });
+	await renderer.renderStatus(action, "READY"); await flush();
+	await renderer.dispose(action.id);
+	await renderer.renderStatus(fresh, "READY"); await flush();
+	assert.match(decode(fresh.images.at(-1)), /ready-plasma/);
+	assert.equal(time.size, 1);
+});
+
+for (const selection of ["plasma", "attention", "particle"]) test(`${selection} READY survives failed frames and releases on static exit and disappearance`, async () => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key("a"), neighbor = key("b");
+	renderer.configureGlobal(action.id, { readyBackground: selection });
+	renderer.configureProject(neighbor.id, { readyBackground: "particle", projectName: "Neighbor" });
+	const original = action.setImage.bind(action); let calls = 0;
+	action.setImage = (image) => ++calls <= 2 ? Promise.reject(new Error("failed")) : original(image);
+	await renderer.renderStatus(action, "READY"); await renderer.renderStatus(neighbor, "READY"); await flush();
+	await time.tick(150); await time.tick(150);
+	assert.ok(action.images.length > 0);
+	await renderer.renderStatus(action, "ERROR");
+	assert.match(decode(action.images.at(-1)), /#CF3D3D/);
+	assert.equal(time.size, 1);
+	await renderer.renderStatus(action, "READY"); await flush();
+	assert.match(decode(action.images.at(-1)), effectPattern[selection]);
+	await renderer.renderStatus(action, "OFFLINE");
+	assert.match(decode(action.images.at(-1)), /#5D6470/);
+	await renderer.dispose(action.id); const hidden = action.images.length, neighborBefore = neighbor.images.length;
+	await time.tick(150);
+	assert.equal(action.images.length, hidden);
+	assert.equal(neighbor.images.length, neighborBefore + 1);
+	await renderer.dispose(neighbor.id);
+	assert.equal(time.size, 0); assert.equal(renderer.animationCount, 0);
+});
+
+for (const selection of ["particle", "attention"]) test(`status transitions sharing ${selection} still replace controllers without static frames`, async () => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key(selection);
+	renderer.configureProject(action.id, { readyBackground: selection, projectName: "Alpha" });
+	const alternate = selection === "particle" ? "BUSY" : "ATTENTION";
+	for (const status of [alternate, "READY", alternate, "READY"]) {
+		const count = action.images.length;
+		await renderer.renderStatus(action, status); await flush();
+		assert.equal(action.images.length, count + 1);
+		assert.match(decode(action.images.at(-1)), effectPattern[selection]);
+		assert.match(decode(action.images.at(-1)), new RegExp(`>${status}<`));
+		assert.equal(time.size, 1);
+	}
+	assert.equal(time.starts, 4); assert.equal(time.cancels, 3);
+	await renderer.dispose(action.id);
+});

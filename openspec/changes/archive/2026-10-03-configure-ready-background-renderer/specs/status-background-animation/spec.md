@@ -1,8 +1,4 @@
-## Purpose
-
-Make active work and requests for user input visibly distinct through status-selected animated backgrounds that remain readable and independent on each visible Stream Deck key.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Per-key READY background selection
 Both global and project status keys SHALL expose a READY background selector in their property inspector's Display section with exactly the currently implemented animated backgrounds: Plasma, Attention halo, and Particles. Selection SHALL be persisted independently per key and restored when the inspector opens, settings arrive, or the key reappears. Missing, malformed, or unsupported selections SHALL resolve to Plasma consistently in the inspector and key. Saving a selection SHALL preserve unrelated settings, including project selection, fonts, positions, and section state. The selector SHALL explain that the setting changes only READY appearance and retains the renderer's original colors.
@@ -34,6 +30,8 @@ A changed effective READY background selection SHALL replace only that visible R
 - **THEN** the latest selection becomes the visible READY background after the issued write settles
 - **AND** queued superseded frames cannot overwrite it and later frames and cleanup remain possible
 
+## MODIFIED Requirements
+
 ### Requirement: Status-selected backgrounds for both status actions
 Every visible global or project status key SHALL display the existing particle-network background while its effective status is `BUSY`, a smoothly pulsing orange halo while its effective status is `ATTENTION`, its independently configured animated background while its effective status is `READY` (defaulting to green plasma), and the existing static status image for `ERROR` or `OFFLINE`. READY selections SHALL retain the existing renderer palettes and timing: green plasma, orange attention halo, and blue/light-blue particles. Background selection SHALL NOT alter effective status, status aggregation, project scope, request handling, or action interaction.
 
@@ -56,37 +54,6 @@ Every visible global or project status key SHALL display the existing particle-n
 #### Scenario: No connection or a failure applies
 - **WHEN** a key has effective status `OFFLINE` or `ERROR`
 - **THEN** it displays the corresponding static image without running a READY background
-
-### Requirement: Continuous readable attention pulse
-The attention halo SHALL repeatedly and smoothly vary in intensity while `ATTENTION` remains active, without hard on/off blinking or a time limit. The `ATTENTION` status label SHALL remain readable throughout the cycle and SHALL NOT pulse or disappear with the background. Frames SHALL use the Stream Deck image API without additional runtime dependencies or animated image files.
-
-#### Scenario: Attention remains unresolved
-- **WHEN** an attention key remains visible over multiple pulse cycles
-- **THEN** its orange halo continues changing and its status label remains readable throughout
-
-#### Scenario: Attention outlasts one pulse
-- **WHEN** outstanding requests remain unresolved after the first pulse cycle
-- **THEN** the animation continues rather than becoming static
-
-### Requirement: Independent and stable animation lifecycle
-Each visible animated key SHALL maintain an independent lifecycle. Repeated reports of the same effective status SHALL NOT restart its effect, reset its phase, or rewrite an unchanged title. An explicit presentation refresh SHALL remain possible without resetting the active effect. A newly visible or reappearing key SHALL render the current status without waiting for a new report.
-
-#### Scenario: Repeated attention reports
-- **WHEN** a visible key receives repeated `ATTENTION` reports
-- **THEN** the existing pulse advances without restarting or rewriting the unchanged title
-
-#### Scenario: One key disappears
-- **WHEN** one of two animated keys disappears
-- **THEN** its resources are released and it receives no further queued or newly scheduled frame writes while the other key continues unaffected
-- **AND** a write already issued before disappearance is allowed to settle without triggering further writes
-
-#### Scenario: Key appears during attention
-- **WHEN** a key becomes visible or reappears while its effective status is already `ATTENTION`
-- **THEN** it immediately starts its own halo without restarting other keys
-
-#### Scenario: Explicit refresh during attention
-- **WHEN** presentation is explicitly refreshed while a key remains in `ATTENTION`
-- **THEN** the refreshed presentation is rendered and subsequent frames continue the same pulse phase
 
 ### Requirement: Safe transitions and recoverable image writes
 On a status change, the old status presentation SHALL stop and the new status presentation SHALL take over without an artificial intermediate status. The new status SHALL select its own background, including the configured READY selection. Queued old frames SHALL NOT overwrite the new presentation. Image-write failures SHALL NOT permanently prevent later frames, status transitions, or cleanup.

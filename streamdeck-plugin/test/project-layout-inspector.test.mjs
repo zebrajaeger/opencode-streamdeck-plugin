@@ -7,7 +7,7 @@ import { normalizeProjectPresentation, TEXT_POSITIONS } from "../de.lars-brandt.
 function inspector(settings = {}) {
 	const elements = new Map();
 	const element = () => ({ value: "", options: [], listeners: {}, addEventListener(name, listener) { this.listeners[name] = listener; }, querySelectorAll(selector) { return selector === "option" ? this.options : []; }, replaceChildren() { this.options = []; }, append(option) { this.options.push(option); }, change(value) { this.value = value; this.listeners.valuechange(); }, input(value) { this.value = value; this.listeners.input(); }, click() { this.listeners.click?.(); }, focus() { this.focused = true; } });
-	for (const id of ["project-select", "project-id", "project-detail", "project-name", "name-position", "status-position", "name-font", "status-font", "font-dialog", "font-form", "font-dialog-title", "font-family", "font-size", "font-size-value", "font-style", "font-underline", "font-color", "font-cancel", "font-apply"]) elements.set(`#${id}`, element());
+	for (const id of ["project-select", "project-id", "project-detail", "project-name", "name-position", "status-position", "ready-background", "name-font", "status-font", "font-dialog", "font-form", "font-dialog-title", "font-family", "font-size", "font-size-value", "font-style", "font-underline", "font-color", "font-cancel", "font-apply"]) elements.set(`#${id}`, element());
 	const dialog = elements.get("#font-dialog");
 	dialog.showModal = () => { dialog.open = true; };
 	dialog.close = () => { dialog.open = false; dialog.listeners.close(); };
@@ -143,4 +143,30 @@ test("font dialog restores defaults, cancels drafts, saves independently and sur
 	elements.get("#name-font").click();
 	assert.equal(elements.get("#font-size").value, "20");
 	assert.equal(elements.get("#font-family").value, "Arial");
+});
+
+test("project READY selector restores all choices without feedback and preserves layout, fonts and sections", () => {
+	const settings = { projectID: "a", projectName: "Alpha", nameFontSize: 23, statusFontSize: 20, namePosition: "top", statusPosition: "bottom", sections: { display: false }, extra: 42 };
+	let { elements, socket, saved } = inspector(settings);
+	const select = elements.get("#ready-background");
+	assert.deepEqual(select.options.map(({ value }) => value), ["plasma", "attention", "particle"]);
+	assert.equal(select.value, "plasma"); assert.equal(saved(), undefined);
+	for (const value of ["attention", "particle", "plasma"]) {
+		select.change(value);
+		assert.equal(saved().readyBackground, value);
+		for (const field of Object.keys(settings)) assert.deepEqual(saved()[field], settings[field]);
+	}
+	select.change("attention");
+	({ elements, socket, saved } = inspector(saved()));
+	assert.equal(elements.get("#ready-background").value, "attention"); assert.equal(saved(), undefined);
+	socket.message({ event: "didReceiveSettings", payload: { settings: { ...settings, readyBackground: [] } } });
+	assert.equal(elements.get("#ready-background").value, "plasma"); assert.equal(saved(), undefined);
+	elements.get("#ready-background").change("particle");
+	elements.get("#name-font").click(); elements.get("#font-cancel").click();
+	assert.equal(saved().readyBackground, "particle");
+	elements.get("#name-font").click(); elements.get("#font-size").value = "24";
+	elements.get("#font-form").listeners.submit({ preventDefault() {} });
+	assert.equal(saved().readyBackground, "particle");
+	elements.get("#project-id").change("b");
+	assert.equal(saved().readyBackground, "particle");
 });

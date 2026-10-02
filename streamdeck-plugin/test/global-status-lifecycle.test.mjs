@@ -32,3 +32,20 @@ test("global key reacts to font settings delivered by Stream Deck while status s
 	assert.match(decode(key.images.at(-1)), /fill="#FF00AA"/);
 	await action.onWillDisappear(event({}));
 });
+
+test("global READY selection is configured on appearance and settings changes and restored after hiding", async (t) => {
+	t.mock.timers.enable({ apis: ["setInterval"] });
+	const action = new OpenCodeStatus();
+	const key = { id: "ready-global", images: [], isKey: () => true, async setImage(image) { this.images.push(image); }, async setTitle() {} };
+	Object.defineProperty(action, "actions", { value: [key] });
+	const event = (settings) => ({ action: key, payload: { settings } });
+	action.setStatus("READY");
+	await action.onWillAppear(event({ readyBackground: "attention" })); await flush();
+	assert.match(decode(key.images.at(-1)), /attention-halo/);
+	await action.onDidReceiveSettings(event({ readyBackground: "particle" })); await flush();
+	assert.match(decode(key.images.at(-1)), /<line /);
+	await action.onWillDisappear(event({}));
+	await action.onWillAppear(event({ readyBackground: "attention" })); await flush();
+	assert.match(decode(key.images.at(-1)), /attention-halo/);
+	await action.onWillDisappear(event({}));
+});

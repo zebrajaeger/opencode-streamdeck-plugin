@@ -169,12 +169,12 @@ The system SHALL retain the existing global status action, and it SHALL continue
 - **THEN** each action updates according to its own aggregation scope
 
 ### Requirement: Stable presentation for a single project instance
-With one OpenCode instance for the configured project, the project-status action SHALL retain its displayed effective status while the reported aggregate remains unchanged. Repeated identical reports SHALL NOT rewrite an unchanged static image or title, restart the BUSY, ATTENTION, or READY animation, reset an active animation's phase, or introduce artificial READY, BUSY, ATTENTION, or OFFLINE transitions. Scheduled animation frames SHALL continue independently of status reports. Legitimate status transitions SHALL remain immediate, without added debounce or minimum-display delays. Simultaneous OpenCode instances of the same project are outside this requirement's acceptance scope.
+With one OpenCode instance for the configured project, the project-status action SHALL retain its displayed effective status while the reported aggregate remains unchanged. Repeated identical reports SHALL NOT rewrite an unchanged static image or title, restart the BUSY, ATTENTION, or selected READY animation, reset an active animation's phase, or introduce artificial READY, BUSY, ATTENTION, or OFFLINE transitions. Scheduled animation frames SHALL continue independently of status reports. Legitimate status transitions SHALL remain immediate, without added debounce or minimum-display delays. Simultaneous OpenCode instances of the same project are outside this requirement's acceptance scope.
 
 #### Scenario: Connected project remains inactive
 - **WHEN** a connected project's single source remains idle and repeatedly reports unchanged state
-- **THEN** its visible key remains READY with continuously advancing plasma
-- **AND** unchanged reports do not restart the plasma, reset phase, or rewrite its unchanged title
+- **THEN** its visible key remains READY with its continuously advancing selected background
+- **AND** unchanged reports do not restart the effect, reset phase, or rewrite its unchanged title
 
 #### Scenario: Connected project remains busy
 - **WHEN** a connected project's single source continuously reports busy or retry activity without a higher-priority state
@@ -188,7 +188,7 @@ With one OpenCode instance for the configured project, the project-status action
 
 #### Scenario: Actual work completes
 - **WHEN** the configured project's final working session becomes idle and no higher-priority state applies
-- **THEN** the key promptly changes from BUSY to READY, stops particles, and starts green plasma
+- **THEN** the key promptly changes from BUSY to READY and displays its selected READY background
 
 #### Scenario: Attention, failure, or disconnection is real
 - **WHEN** the configured project's effective status changes because of an attention request, execution failure, error expiry, or connection loss
@@ -199,24 +199,24 @@ With one OpenCode instance for the configured project, the project-status action
 - **THEN** its halo continues without resetting its phase or rewriting its unchanged title
 
 ### Requirement: Initial and explicit presentation refreshes remain available
-Status subscriptions SHALL deliver an initial effective status and subsequent changed effective statuses independently for each scope. A newly visible or reappearing project key SHALL render its current status even when that status has not changed. Explicit changes to project selection or presentation SHALL NOT be suppressed by unchanged-status detection. Refreshing an already active READY presentation SHALL preserve its plasma phase while updating its configured labels.
+Status subscriptions SHALL deliver an initial effective status and subsequent changed effective statuses independently for each scope. A newly visible or reappearing project key SHALL render its current status even when that status has not changed. Explicit changes to project selection or presentation SHALL NOT be suppressed by unchanged-status detection. Refreshing an already active READY presentation SHALL preserve its selected effect's phase while updating configured labels unless the effective READY renderer selection changes, in which case the live READY renderer change requirements apply.
 
 #### Scenario: Key appears while the project is READY
 - **WHEN** a key becomes visible while its configured project is already READY
-- **THEN** it immediately starts its own READY plasma without needing another status transition
+- **THEN** it immediately starts its own selected READY background without needing another status transition
 
 #### Scenario: Key reappears during work
 - **WHEN** a previously hidden key reappears while its project is BUSY
 - **THEN** it starts its own current BUSY animation without affecting other visible keys
 
 #### Scenario: Project selection changes to another READY project
-- **WHEN** the user changes the selected project while both projects have effective status READY
-- **THEN** the subscription switches to the new project and its labels update while the active READY plasma phase is preserved
+- **WHEN** the user changes the selected project while both projects have effective status READY and the key's READY renderer selection is unchanged
+- **THEN** the subscription switches to the new project and its labels update while the active READY effect's phase is preserved
 
 #### Scenario: Presentation is explicitly updated
 - **WHEN** the action explicitly requests a presentation refresh while its effective status is unchanged
 - **THEN** the key reflects that presentation update rather than treating it as a redundant status notification
-- **AND** an active READY plasma retains its phase and uses updated configured labels on subsequent frames
+- **AND** an active READY effect retains its phase and uses updated configured labels on subsequent frames when its effective renderer selection is unchanged
 
 ### Requirement: Project-scoped terminal failure recovery
 The system SHALL apply the global terminal-failure recovery rules to each configured project status action for both execution and compaction failures. Only failures admitted through authoritative session-project ownership SHALL end the affected session's previous working contribution and trigger the project's transient error indication. Failure recovery SHALL NOT clear other sessions' activity or outstanding attention requests. Foreign or unresolved failures SHALL NOT change a project's retained or displayed status. Error expiry and reconnect SHALL NOT restore a failed session's obsolete working contribution.
@@ -401,7 +401,7 @@ The font-size control SHALL be a horizontal slider supporting every whole-pixel 
 - **AND** the saved project selection and unrelated settings remain intact
 
 ### Requirement: Project attention background
-Every visible project status key whose configured project has effective status `ATTENTION` SHALL display the continuous orange attention halo defined by `status-background-animation`. It SHALL stop the halo when that project's effective status changes, and SHALL NOT change presentation because another project's requests change without affecting the configured project's status.
+Every visible project status key whose configured project has effective status `ATTENTION` SHALL display the continuous orange attention halo defined by `status-background-animation` regardless of its READY renderer selection. It SHALL end the ATTENTION presentation when that project's effective status changes, and SHALL NOT change presentation because another project's requests change without affecting the configured project's status.
 
 #### Scenario: Configured project has an unanswered agent question
 - **WHEN** an admitted unanswered agent question makes the configured project's effective status `ATTENTION`
@@ -413,15 +413,19 @@ Every visible project status key whose configured project has effective status `
 
 #### Scenario: Foreign attention does not animate a ready project
 - **WHEN** another project needs attention while the configured project remains `READY`
-- **THEN** the configured project's key continues its green READY plasma rather than switching to the attention halo
+- **THEN** the configured project's key continues its selected READY background without changing status or restarting the effect
 
 ### Requirement: Project READY background
-Every visible project status key whose configured project has effective status `READY` SHALL display the continuous green plasma defined by `status-background-animation`. Its status and configured project labels SHALL remain readable on every frame. Another project's activity or requests SHALL NOT select a different effect or restart the configured project's plasma unless its own effective status changes.
+Every visible project status key whose configured project has effective status `READY` SHALL display its independently configured READY background defined by `status-background-animation`, defaulting to continuous green plasma. Its READY status and configured project labels SHALL remain readable on every frame. Another project's activity or requests SHALL NOT select a different effect or restart the configured project's READY animation unless its own effective status changes. The selection SHALL belong to the key, not the project, so keys showing the same project can choose different backgrounds.
 
 #### Scenario: Configured project is inactive
 - **WHEN** a configured project is connected and its effective status is READY
-- **THEN** its visible key displays green plasma with its configured labels
+- **THEN** its visible key displays its selected background with its configured labels, defaulting to green plasma
 
 #### Scenario: Another project starts work
 - **WHEN** project A becomes BUSY while project B remains READY
-- **THEN** A's key and the global key display particles while B's plasma continues without restarting
+- **THEN** A's key and the global key display particles while B's selected READY background continues without restarting
+
+#### Scenario: Two keys show the same project
+- **WHEN** two keys showing the same READY project select Plasma and Attention halo respectively
+- **THEN** each displays its own selected background with READY status and its own configured labels

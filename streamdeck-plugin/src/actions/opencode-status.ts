@@ -4,8 +4,10 @@ import type { JsonObject } from "@elgato/utils";
 import type { GlobalStatusValue } from "../status-types";
 import { StatusActionRenderer } from "./status-action-renderer";
 import type { ProjectPresentation } from "../../de.lars-brandt.opencode.sdPlugin/property-inspector/project-presentation.mjs";
+import type { ReadyBackground } from "../../de.lars-brandt.opencode.sdPlugin/property-inspector/ready-background.mjs";
 
 interface GlobalStatusSettings extends JsonObject {
+	readyBackground?: ReadyBackground;
 	statusFontSize?: number;
 	statusFontFamily?: string;
 	statusFontStyle?: ProjectPresentation["statusFontStyle"];
