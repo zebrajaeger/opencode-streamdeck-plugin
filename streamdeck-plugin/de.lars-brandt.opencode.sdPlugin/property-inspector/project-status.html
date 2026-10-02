@@ -38,17 +38,28 @@
 			<div class="sdpi-row"><label class="sdpi-label" for="name-position">Name position</label><div class="sdpi-control">
 				<sdpi-select id="name-position"><option value="top">Top</option><option value="middle" disabled>Middle</option><option value="bottom">Bottom</option></sdpi-select>
 			</div></div>
-			<div class="sdpi-row"><label class="sdpi-label" for="name-font-size">Name font size</label><div class="sdpi-control"><sdpi-select id="name-font-size"></sdpi-select></div></div>
+			<div class="sdpi-row"><label class="sdpi-label" for="name-font">Name font</label><div class="sdpi-control"><button type="button" class="font-trigger" id="name-font">Configure name font</button></div></div>
 			<div class="sdpi-group-title">Status</div>
 			<div class="sdpi-row"><label class="sdpi-label" for="status-position">Status position</label><div class="sdpi-control">
 				<sdpi-select id="status-position"><option value="top">Top</option><option value="middle">Middle</option><option value="bottom" disabled>Bottom</option></sdpi-select>
 			</div></div>
-			<div class="sdpi-row"><label class="sdpi-label" for="status-font-size">Status font size</label><div class="sdpi-control">
-				<sdpi-select id="status-font-size"></sdpi-select>
+			<div class="sdpi-row"><label class="sdpi-label" for="status-font">Status font</label><div class="sdpi-control">
+				<button type="button" class="font-trigger" id="status-font">Configure status font</button>
 				<p class="sdpi-detail">Font sizes stay fixed. Text that does not fit is shortened with ….</p>
 			</div></div>
 		</div>
 	</details>
+	<dialog id="font-dialog" aria-labelledby="font-dialog-title">
+		<form method="dialog" id="font-form">
+			<h2 id="font-dialog-title">Font</h2>
+			<label for="font-family">Font family</label><select id="font-family"></select>
+			<label for="font-size">Font size: <output id="font-size-value" for="font-size">20 px</output></label><input type="range" id="font-size" min="16" max="28" step="1" value="20">
+			<label for="font-style">Font style</label><select id="font-style"></select>
+			<label class="font-checkbox" for="font-underline"><input type="checkbox" id="font-underline"> Underline</label>
+			<label for="font-color">Text color</label><input type="color" id="font-color">
+			<div class="font-actions"><button type="button" id="font-cancel">Cancel</button><button type="submit" id="font-apply">Apply</button></div>
+		</form>
+	</dialog>
 	<script type="module" src="project-status-inspector.mjs"></script>
 </body>
 </html>

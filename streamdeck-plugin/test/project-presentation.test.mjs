@@ -13,17 +13,22 @@ test("labels overlay the original image without adding opaque backgrounds", () =
 	assert.equal((svg.match(/<rect\b/g) ?? []).length, 1);
 	for (const label of svg.matchAll(/<g[^>]+data-label="[^"]+"[^>]*>(.*?)<\/g>/g)) {
 		assert.match(label[1], /^<text\b/);
-		assert.doesNotMatch(label[1], /<rect|<path|<image/);
+		assert.doesNotMatch(label[1], /<rect|<image/);
 	}
 });
 
 test("normalizes blank names, defaults, unsupported values, and every collision deterministically", () => {
-	assert.deepEqual(normalizeProjectPresentation(), { projectName: "", namePosition: "bottom", statusPosition: "middle", nameFontSize: 20, statusFontSize: 20 });
+	const defaults = normalizeProjectPresentation();
+	assert.equal(defaults.projectName, "");
+	assert.equal(defaults.namePosition, "bottom");
+	assert.equal(defaults.statusPosition, "middle");
+	assert.equal(defaults.nameFontSize, 20);
+	assert.equal(defaults.statusFontSize, 20);
 	assert.deepEqual(normalizeProjectPresentation({ projectName: null, namePosition: "invalid", statusPosition: false }), normalizeProjectPresentation());
 	assert.equal(normalizeProjectPresentation({ projectName: "" }).projectName, "");
 	for (const position of TEXT_POSITIONS) {
 		assert.deepEqual(normalizeProjectPresentation({ namePosition: position, statusPosition: position }), {
-			projectName: "", statusPosition: position, namePosition: position === "bottom" ? "middle" : "bottom", nameFontSize: 20, statusFontSize: 20,
+			...defaults, statusPosition: position, namePosition: position === "bottom" ? "middle" : "bottom",
 		});
 	}
 });
@@ -32,7 +37,7 @@ for (const namePosition of TEXT_POSITIONS) for (const statusPosition of TEXT_POS
 	if (namePosition === statusPosition) continue;
 	test(`preserves and composes layout ${namePosition}/${statusPosition} in separate bounded regions`, () => {
 		const settings = { projectName: "My project", namePosition, statusPosition };
-		assert.deepEqual(normalizeProjectPresentation(settings), { ...settings, nameFontSize: 20, statusFontSize: 20 });
+		assert.deepEqual(normalizeProjectPresentation(settings), { ...normalizeProjectPresentation(), ...settings });
 		const svg = decode(projectStatusImage(image, "ATTENTION", settings));
 		assert.match(svg, new RegExp(`transform="translate\\(8 ${PROJECT_TEXT_BANDS[namePosition]}\\)" data-label="name" data-position="${namePosition}"`));
 		assert.match(svg, new RegExp(`transform="translate\\(8 ${PROJECT_TEXT_BANDS[statusPosition]}\\)" data-label="status" data-position="${statusPosition}"`));
@@ -53,8 +58,33 @@ test("escapes literal XML, preserves non-ASCII, and confines multiline or long n
 	assert.match(compose(""), />READY<\/text>/);
 });
 
+test("independent font attributes normalize safely and preserve legacy appearance", () => {
+	const old = normalizeProjectPresentation({ nameFontSize: 28, statusFontSize: 16 });
+	assert.equal(old.nameFontFamily, "Arial");
+	assert.equal(old.nameFontStyle, "Regular");
+	assert.equal(old.nameFontUnderline, false);
+	assert.equal(old.nameFontColor, "#FFFFFF");
+	const selected = normalizeProjectPresentation({ projectName: "Long project name", nameFontFamily: "Georgia", nameFontStyle: "Bold Italic", nameFontUnderline: true, nameFontColor: "#ff00aa", statusFontFamily: "Courier New", statusFontColor: "#00ffaa", statusFontSize: 24 });
+	assert.equal(selected.nameFontColor, "#FF00AA");
+	assert.equal(selected.statusFontColor, "#00FFAA");
+	const svg = decode(projectStatusImage(image, "READY", selected));
+	assert.match(svg, /data-label="name"[^]*?font-family="Georgia, sans-serif"[^]*?font-weight="bold" font-style="italic" text-decoration="underline" fill="#FF00AA"/);
+	assert.match(svg, /data-label="name"[^]*?<path d="M[^\"]+" stroke="#FF00AA" stroke-width="[^\"]+"\/>/);
+	assert.match(svg, /data-label="status"[^]*?font-family="Courier New, sans-serif"[^]*?fill="#00FFAA"/);
+	assert.doesNotMatch(svg.split('data-label="status"')[1], /<path /);
+	assert.match(svg, /…<\/text>/);
+	const invalid = normalizeProjectPresentation({ nameFontFamily: '\" onload="bad', nameFontStyle: "nonsense", nameFontUnderline: "true", nameFontColor: "#FFFFFF\"/>" });
+	assert.equal(invalid.nameFontFamily, "Arial");
+	assert.equal(invalid.nameFontStyle, "Regular");
+	assert.equal(invalid.nameFontUnderline, false);
+	assert.equal(invalid.nameFontColor, "#FFFFFF");
+	assert.doesNotMatch(decode(projectStatusImage(image, "READY", invalid)), /onload=/);
+});
+
 test("font-size normalization is numeric, deterministic and independent", () => {
-	for (const value of [undefined, null, "24", NaN, Infinity, 0, -1, 18, 100]) {
+	assert.deepEqual(FONT_SIZES, Array.from({ length: 13 }, (_, index) => index + 16));
+	assert.equal(normalizeProjectPresentation({ nameFontSize: 23, statusFontSize: 27 }).nameFontSize, 23);
+	for (const value of [undefined, null, "24", NaN, Infinity, 0, -1, 15, 28.5, 100]) {
 		const normalized = normalizeProjectPresentation({ nameFontSize: value, statusFontSize: 24 });
 		assert.equal(normalized.nameFontSize, DEFAULT_FONT_SIZE);
 		assert.equal(normalized.statusFontSize, 24);

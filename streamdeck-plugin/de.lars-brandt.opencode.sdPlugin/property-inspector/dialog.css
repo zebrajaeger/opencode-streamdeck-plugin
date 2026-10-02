@@ -34,3 +34,16 @@ body { font: 12px/1.4 "Segoe UI", system-ui, sans-serif; margin: 12px; }
 .sdpi-detail { margin: 4px 0 0; color: var(--dialog-detail); font-size: 11px; }
 .sdpi-group-title { grid-column: 1 / -1; display: flex; align-items: center; gap: 9px; color: var(--dialog-text); margin: 4px 0; }
 .sdpi-group-title::before, .sdpi-group-title::after { content: ""; height: 1px; background: var(--dialog-rule); flex: 1; }
+.font-trigger, .font-actions button, #font-dialog select, #font-dialog input { background: var(--dialog-control); color: var(--dialog-control-text); border: 1px solid var(--dialog-rule); border-radius: 3px; font: inherit; }
+.font-trigger { width: 100%; min-height: 28px; cursor: pointer; text-align: left; padding: 4px 8px; }
+.font-trigger:focus-visible, .font-actions button:focus-visible, #font-dialog :focus-visible { outline: 2px solid var(--dialog-text); outline-offset: 2px; }
+#font-dialog { width: min(290px, calc(100% - 32px)); box-sizing: border-box; background: var(--dialog-bg); color: var(--dialog-text); border: 1px solid var(--dialog-rule); border-radius: 5px; padding: 16px; }
+#font-dialog::backdrop { background: #0009; }
+#font-dialog form { display: grid; gap: 7px; }
+#font-dialog h2 { font-size: 15px; margin: 0 0 7px; }
+#font-dialog select, #font-dialog input[type="color"] { min-height: 28px; width: 100%; box-sizing: border-box; }
+#font-dialog input[type="range"] { width: 100%; box-sizing: border-box; accent-color: var(--dialog-text); cursor: pointer; }
+#font-size-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+#font-dialog .font-checkbox { display: flex; gap: 6px; align-items: center; margin: 5px 0; }
+#font-dialog .font-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+#font-dialog .font-actions button { padding: 5px 10px; cursor: pointer; }

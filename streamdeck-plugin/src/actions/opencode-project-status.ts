@@ -6,13 +6,21 @@ import type { KnownProject } from "../known-projects";
 import { StatusActionRenderer } from "./status-action-renderer";
 import { ProjectSelector } from "./project-selector";
 import { ProjectStatusSubscriptions } from "./project-status-subscriptions";
-import type { TextPosition } from "../../de.lars-brandt.opencode.sdPlugin/property-inspector/project-presentation.mjs";
+import type { TextPosition, FontStyle } from "../../de.lars-brandt.opencode.sdPlugin/property-inspector/project-presentation.mjs";
 
 export interface ProjectStatusSettings extends JsonObject {
 	projectID?: string;
 	projectName?: string;
 	nameFontSize?: number;
 	statusFontSize?: number;
+	nameFontFamily?: string;
+	statusFontFamily?: string;
+	nameFontStyle?: FontStyle;
+	statusFontStyle?: FontStyle;
+	nameFontUnderline?: boolean;
+	statusFontUnderline?: boolean;
+	nameFontColor?: string;
+	statusFontColor?: string;
 	namePosition?: TextPosition;
 	statusPosition?: TextPosition;
 }

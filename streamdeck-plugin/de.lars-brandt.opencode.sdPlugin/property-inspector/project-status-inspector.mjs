@@ -1,4 +1,4 @@
-import { FONT_SIZES, normalizeProjectPresentation } from "./project-presentation.mjs";
+import { FONT_FAMILIES, FONT_STYLES, normalizeProjectPresentation } from "./project-presentation.mjs";
 
 export function projectBasename(directory) {
 	return directory.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean).at(-1) || directory;
@@ -54,8 +54,18 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	const projectName = document.querySelector("#project-name");
 	const namePosition = document.querySelector("#name-position");
 	const statusPosition = document.querySelector("#status-position");
-	const nameFontSize = document.querySelector("#name-font-size");
-	const statusFontSize = document.querySelector("#status-font-size");
+	const fontDialog = document.querySelector("#font-dialog");
+	const fontForm = document.querySelector("#font-form");
+	const fontTitle = document.querySelector("#font-dialog-title");
+	const fontFamily = document.querySelector("#font-family");
+	const fontSize = document.querySelector("#font-size");
+	const fontSizeValue = document.querySelector("#font-size-value");
+	const fontStyle = document.querySelector("#font-style");
+	const fontUnderline = document.querySelector("#font-underline");
+	const fontColor = document.querySelector("#font-color");
+	const triggers = { name: document.querySelector("#name-font"), status: document.querySelector("#status-font") };
+	let editingFont = null;
+	let returnFocus = null;
 	let rendering = false;
 	const update = (callback) => {
 		rendering = true;
@@ -64,14 +74,15 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	const onChange = (control, callback) => control.addEventListener("valuechange", () => {
 		if (!rendering) callback();
 	});
-	for (const select of [nameFontSize, statusFontSize]) {
-		for (const size of FONT_SIZES) {
+	for (const [select, choices] of [[fontFamily, FONT_FAMILIES], [fontStyle, FONT_STYLES]]) {
+		for (const choice of choices) {
 			const option = document.createElement("option");
-			option.value = String(size);
-			option.textContent = `${size} px`;
+			option.value = String(choice);
+			option.textContent = String(choice);
 			select.append(option);
 		}
 	}
+	fontSize.addEventListener("input", () => { fontSizeValue.textContent = `${fontSize.value} px`; });
 	const connection = inspectorRegistration(port, uuid, registerEvent, actionInfo);
 	const websocket = new WebSocket(connection.url);
 	const context = connection.context;
@@ -96,7 +107,8 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	}
 
 	function save(changes) {
-		settings = { ...settings, ...normalizeProjectPresentation({ ...settings, ...changes }), ...changes };
+		const normalized = normalizeProjectPresentation({ ...settings, ...changes });
+		settings = { ...settings, namePosition: normalized.namePosition, statusPosition: normalized.statusPosition, nameFontSize: normalized.nameFontSize, statusFontSize: normalized.statusFontSize, ...changes };
 		selectedProjectID = settings.projectID ?? "";
 		websocket.send(JSON.stringify({ event: "setSettings", context, payload: settings }));
 		renderProjects();
@@ -109,8 +121,9 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 			projectName.value = presentation.projectName;
 			namePosition.value = presentation.namePosition;
 			statusPosition.value = presentation.statusPosition;
-			nameFontSize.value = String(presentation.nameFontSize);
-			statusFontSize.value = String(presentation.statusFontSize);
+			for (const prefix of ["name", "status"]) {
+				triggers[prefix].textContent = `${presentation[`${prefix}FontFamily`]} · ${presentation[`${prefix}FontSize`]} px · ${presentation[`${prefix}FontStyle`]}`;
+			}
 			for (const option of namePosition.querySelectorAll("option")) option.disabled = option.value === presentation.statusPosition;
 			for (const option of statusPosition.querySelectorAll("option")) option.disabled = option.value === presentation.namePosition;
 		});
@@ -168,8 +181,40 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	onChange(projectName, () => save({ projectName: projectName.value }));
 	onChange(namePosition, () => save({ namePosition: namePosition.value }));
 	onChange(statusPosition, () => save({ statusPosition: statusPosition.value }));
-	onChange(nameFontSize, () => save({ nameFontSize: Number(nameFontSize.value) }));
-	onChange(statusFontSize, () => save({ statusFontSize: Number(statusFontSize.value) }));
+	for (const [prefix, trigger] of Object.entries(triggers)) trigger.addEventListener("click", () => {
+		const presentation = normalizeProjectPresentation(settings);
+		editingFont = prefix;
+		returnFocus = trigger;
+		fontTitle.textContent = prefix === "name" ? "Name font" : "Status font";
+		fontFamily.value = presentation[`${prefix}FontFamily`];
+		fontSize.value = String(presentation[`${prefix}FontSize`]);
+		fontSizeValue.textContent = `${fontSize.value} px`;
+		fontStyle.value = presentation[`${prefix}FontStyle`];
+		fontUnderline.checked = presentation[`${prefix}FontUnderline`];
+		fontColor.value = presentation[`${prefix}FontColor`];
+		fontDialog.showModal();
+		fontFamily.focus();
+	});
+	fontForm.addEventListener("submit", (event) => {
+		event.preventDefault();
+		if (!editingFont) return;
+		const prefix = editingFont;
+		const changes = {
+			[`${prefix}FontFamily`]: fontFamily.value,
+			[`${prefix}FontSize`]: Number(fontSize.value),
+			[`${prefix}FontStyle`]: fontStyle.value,
+			[`${prefix}FontUnderline`]: fontUnderline.checked,
+			[`${prefix}FontColor`]: fontColor.value.toUpperCase(),
+		};
+		fontDialog.close();
+		save(changes);
+	});
+	document.querySelector("#font-cancel").addEventListener("click", () => fontDialog.close());
+	fontDialog.addEventListener("close", () => {
+		editingFont = null;
+		returnFocus?.focus();
+		returnFocus = null;
+	});
 	for (const [id, section] of Object.entries(sections)) {
 		section.addEventListener("toggle", () => {
 			if (!restoringSections && section.open !== sectionStates(settings, defaults)[id]) {

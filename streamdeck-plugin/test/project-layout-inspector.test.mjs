@@ -6,8 +6,11 @@ import { normalizeProjectPresentation, TEXT_POSITIONS } from "../de.lars-brandt.
 
 function inspector(settings = {}) {
 	const elements = new Map();
-	const element = () => ({ value: "", options: [], listeners: {}, addEventListener(name, listener) { this.listeners[name] = listener; }, querySelectorAll(selector) { return selector === "option" ? this.options : []; }, replaceChildren() { this.options = []; }, append(option) { this.options.push(option); }, change(value) { this.value = value; this.listeners.valuechange(); } });
-	for (const id of ["project-select", "project-id", "project-detail", "project-name", "name-position", "status-position", "name-font-size", "status-font-size"]) elements.set(`#${id}`, element());
+	const element = () => ({ value: "", options: [], listeners: {}, addEventListener(name, listener) { this.listeners[name] = listener; }, querySelectorAll(selector) { return selector === "option" ? this.options : []; }, replaceChildren() { this.options = []; }, append(option) { this.options.push(option); }, change(value) { this.value = value; this.listeners.valuechange(); }, input(value) { this.value = value; this.listeners.input(); }, click() { this.listeners.click?.(); }, focus() { this.focused = true; } });
+	for (const id of ["project-select", "project-id", "project-detail", "project-name", "name-position", "status-position", "name-font", "status-font", "font-dialog", "font-form", "font-dialog-title", "font-family", "font-size", "font-size-value", "font-style", "font-underline", "font-color", "font-cancel", "font-apply"]) elements.set(`#${id}`, element());
+	const dialog = elements.get("#font-dialog");
+	dialog.showModal = () => { dialog.open = true; };
+	dialog.close = () => { dialog.open = false; dialog.listeners.close(); };
 	for (const id of ["name-position", "status-position"]) elements.get(`#${id}`).options = TEXT_POSITIONS.map((value) => ({ value }));
 	const sections = ["project", "advanced", "display"].map((id) => ({ id: `section-${id}`, open: id !== "advanced", listeners: {}, addEventListener(name, listener) { this.listeners[name] = listener; } }));
 	globalThis.document = { querySelector: (selector) => elements.get(selector), querySelectorAll: (selector) => selector === ".sdpi-section" ? sections : [], createElement: element };
@@ -84,30 +87,60 @@ test("known/manual project selection and presentation edits preserve all setting
 test("dedicated name instructions and controls are visible outside the advanced section", async () => {
 	const html = await readFile(new URL("../de.lars-brandt.opencode.sdPlugin/property-inspector/project-status.html", import.meta.url), "utf8");
 	const visible = html.split('id="section-advanced"')[0] + html.split('id="section-display"')[1];
-	for (const id of ["project-name", "name-position", "status-position", "name-font-size", "status-font-size"]) assert.ok(visible.includes(`id="${id}"`));
+	for (const id of ["project-name", "name-position", "status-position", "name-font", "status-font"]) assert.ok(visible.includes(`id="${id}"`));
 	assert.match(visible, /Use Project name instead of the native Stream Deck title/);
+	assert.match(html, /<dialog id="font-dialog" aria-labelledby="font-dialog-title">/);
+	for (const id of ["font-family", "font-size", "font-style", "font-underline", "font-color"]) assert.ok(html.includes(`for="${id}"`));
+	assert.match(html, /<input type="range" id="font-size" min="16" max="28" step="1"/);
+	assert.match(html, /<output id="font-size-value" for="font-size">20 px<\/output>/);
 });
 
-test("size selectors restore defaults, save independently, and survive project changes and reopening", () => {
+test("font dialog restores defaults, cancels drafts, saves independently and survives project changes and reopening", () => {
 	let { elements, saved } = inspector({ projectID: "a", unrelated: true });
-	assert.equal(elements.get("#name-font-size").value, "20");
-	assert.equal(elements.get("#status-font-size").value, "20");
-	assert.deepEqual(elements.get("#name-font-size").options.map(({ value }) => value), ["16", "20", "24", "28"]);
-	elements.get("#name-font-size").change("28");
-	assert.equal(saved().nameFontSize, 28);
+	elements.get("#name-font").click();
+	assert.equal(elements.get("#font-size").value, "20");
+	assert.equal(elements.get("#font-size-value").textContent, "20 px");
+	assert.equal(elements.get("#font-family").focused, true);
+	elements.get("#font-size").input("23");
+	assert.equal(elements.get("#font-size-value").textContent, "23 px");
+	elements.get("#font-cancel").click();
+	assert.equal(saved(), undefined);
+	elements.get("#name-font").click();
+	assert.equal(elements.get("#font-size").value, "20");
+	elements.get("#font-size").input("23");
+	elements.get("#font-family").value = "Georgia";
+	elements.get("#font-style").value = "Bold Italic";
+	elements.get("#font-underline").checked = true;
+	elements.get("#font-color").value = "#ff00aa";
+	elements.get("#font-form").listeners.submit({ preventDefault() {} });
+	assert.equal(saved().nameFontSize, 23);
 	assert.equal(saved().statusFontSize, 20);
-	elements.get("#status-font-size").change("16");
+	assert.equal(saved().nameFontColor, "#FF00AA");
+	assert.equal(elements.get("#name-font").focused, true);
+	elements.get("#status-font").click();
+	assert.equal(elements.get("#font-size").value, "20");
+	elements.get("#font-size").value = "16";
+	elements.get("#font-form").listeners.submit({ preventDefault() {} });
 	elements.get("#project-select").change("known");
 	elements.get("#project-id").change("manual");
 	const persisted = saved();
 	assert.equal(persisted.unrelated, true);
 	assert.equal(persisted.projectID, "manual");
-	assert.equal(persisted.nameFontSize, 28);
+	assert.equal(persisted.nameFontSize, 23);
 	assert.equal(persisted.statusFontSize, 16);
 	({ elements } = inspector(persisted));
-	assert.equal(elements.get("#name-font-size").value, "28");
-	assert.equal(elements.get("#status-font-size").value, "16");
-	({ elements } = inspector({ nameFontSize: -1, statusFontSize: "28" }));
-	assert.equal(elements.get("#name-font-size").value, "20");
-	assert.equal(elements.get("#status-font-size").value, "20");
+	elements.get("#name-font").click();
+	assert.equal(elements.get("#font-size").value, "23");
+	assert.equal(elements.get("#font-size-value").textContent, "23 px");
+	assert.equal(elements.get("#font-family").value, "Georgia");
+	assert.equal(elements.get("#font-style").value, "Bold Italic");
+	assert.equal(elements.get("#font-underline").checked, true);
+	assert.equal(elements.get("#font-color").value, "#FF00AA");
+	elements.get("#font-dialog").close();
+	elements.get("#status-font").click();
+	assert.equal(elements.get("#font-size").value, "16");
+	({ elements } = inspector({ nameFontSize: -1, statusFontSize: "28", nameFontFamily: "<unsafe>" }));
+	elements.get("#name-font").click();
+	assert.equal(elements.get("#font-size").value, "20");
+	assert.equal(elements.get("#font-family").value, "Arial");
 });

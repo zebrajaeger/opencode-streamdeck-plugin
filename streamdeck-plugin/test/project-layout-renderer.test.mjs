@@ -121,3 +121,35 @@ test("two independent project layouts coexist with the unchanged global presenta
 	assert.doesNotMatch(decode(global.images.at(-1)), /<text/);
 	assert.equal(global.titles.at(-1), "ATTENTION");
 });
+
+test("independent fonts persist on every static and animated frame while global title stays native", async (t) => {
+	t.mock.timers.enable({ apis: ["setInterval"] });
+	const renderer = new StatusActionRenderer(), project = key("font-project"), global = key("font-global");
+	t.after(async () => { await renderer.dispose(project.id); await renderer.dispose(global.id); });
+	const first = { projectName: "Example", nameFontFamily: "Georgia", nameFontStyle: "Bold Italic", nameFontColor: "#CC44AA", nameFontUnderline: true, statusFontFamily: "Courier New", statusFontStyle: "Italic", statusFontColor: "#11FF22" };
+	const assertFonts = (svg, nameColor = "#CC44AA") => {
+		assert.match(svg, new RegExp(`data-label="name"[^]*?font-family="Georgia, sans-serif"[^]*?font-weight="bold" font-style="italic" text-decoration="underline" fill="${nameColor}"`));
+		assert.match(svg, /data-label="status"[^]*?font-family="Courier New, sans-serif"[^]*?font-weight="normal" font-style="italic" text-decoration="none" fill="#11FF22"/);
+	};
+	renderer.configureProject(project.id, first);
+	for (const status of ["OFFLINE", "ERROR", "BUSY", "READY", "ATTENTION"]) {
+		await renderer.renderStatus(project, status);
+		await flush();
+		assertFonts(decode(project.images.at(-1)));
+		if (["BUSY", "READY", "ATTENTION"].includes(status)) {
+			t.mock.timers.tick(PARTICLE_WAIT_ANIMATION.frameIntervalMs * 2);
+			await flush();
+			assertFonts(decode(project.images.at(-1)));
+		}
+	}
+	renderer.configureProject(project.id, { ...first, nameFontColor: "#AA00EE" });
+	await renderer.renderStatus(project, "ATTENTION");
+	assertFonts(decode(project.images.at(-1)), "#AA00EE");
+	t.mock.timers.tick(PARTICLE_WAIT_ANIMATION.frameIntervalMs);
+	await flush();
+	assertFonts(decode(project.images.at(-1)), "#AA00EE");
+	await renderer.renderStatus(global, "READY");
+	await flush();
+	assert.deepEqual(global.titles, ["READY"]);
+	assert.doesNotMatch(decode(global.images.at(-1)), /<text/);
+});
