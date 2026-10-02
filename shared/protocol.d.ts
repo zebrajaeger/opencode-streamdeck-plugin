@@ -1,4 +1,5 @@
 export const PROTOCOL_VERSION: 1;
+export const SOURCE_SUPERSEDED_CLOSE_CODE: 4001;
 
 export const BridgeStatus: Readonly<{
 	READY: "ready";

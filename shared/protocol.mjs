@@ -5,6 +5,7 @@
  * can validate frames before they alter their local state.
  */
 export const PROTOCOL_VERSION = 1;
+export const SOURCE_SUPERSEDED_CLOSE_CODE = 4001;
 
 export const BridgeStatus = Object.freeze({
 	READY: "ready",

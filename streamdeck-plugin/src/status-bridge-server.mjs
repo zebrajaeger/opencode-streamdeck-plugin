@@ -1,6 +1,6 @@
 import { WebSocketServer } from "ws";
 
-import { parseBridgeFrame } from "../../shared/protocol.mjs";
+import { parseBridgeFrame, SOURCE_SUPERSEDED_CLOSE_CODE } from "../../shared/protocol.mjs";
 import { StatusRegistry } from "../../shared/status-registry.mjs";
 
 const LOOPBACK_HOST = "127.0.0.1";
@@ -65,7 +65,7 @@ export class StatusBridgeServer {
 			if (previousSocket && previousSocket !== socket) {
 				const previousSource = this.sockets.get(previousSocket);
 				if (previousSource) this.retireSource(previousSource);
-				previousSocket.close(1000, "Replaced by reconnection");
+				previousSocket.close(SOURCE_SUPERSEDED_CLOSE_CODE, "Replaced by reconnection");
 			}
 
 			const directory = nonEmptyDirectory(frame.directory);
@@ -77,7 +77,7 @@ export class StatusBridgeServer {
 					previousInstanceID: previousDirectorySource.instanceID,
 					instanceID: frame.instanceID,
 				});
-				previousDirectorySource.socket.close(1000, "Replaced by directory source");
+				previousDirectorySource.socket.close(SOURCE_SUPERSEDED_CLOSE_CODE, "Replaced by directory source");
 			}
 
 			const source = { instanceID: frame.instanceID, projectID: nonEmptyProjectID(frame.projectID), directory, socket };

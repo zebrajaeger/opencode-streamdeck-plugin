@@ -3,6 +3,7 @@ import { once } from "node:events";
 import test from "node:test";
 
 import WebSocket from "ws";
+import { SOURCE_SUPERSEDED_CLOSE_CODE } from "../../shared/protocol.mjs";
 
 import { ERROR_INDICATION_DURATION_MS, StatusRegistry } from "../../shared/status-registry.mjs";
 import { StatusBridgeServer } from "../src/status-bridge-server.mjs";
@@ -133,7 +134,7 @@ test("a replacement connection retains an instance state until the active socket
 	const secondClient = new WebSocket(`ws://127.0.0.1:${address.port}`);
 	await once(secondClient, "open");
 	secondClient.send(frame("hello"));
-	await firstClosed;
+	assert.equal((await firstClosed)[0], SOURCE_SUPERSEDED_CLOSE_CODE);
 	await new Promise((resolve) => setImmediate(resolve));
 	assert.equal(bridge.registry.status, "READY");
 
@@ -161,7 +162,7 @@ test("a newer source for one directory replaces its state and survives the older
 	const secondClient = new WebSocket(`ws://127.0.0.1:${address.port}`);
 	await once(secondClient, "open");
 	secondClient.send(frame("hello", { instanceID: "second", directory: "C:\\work\\project" }));
-	await firstClosed;
+	assert.equal((await firstClosed)[0], SOURCE_SUPERSEDED_CLOSE_CODE);
 	secondClient.send(frame("snapshot", {
 		instanceID: "second",
 		sessions: [{ sessionID: "replacement", status: "busy" }],

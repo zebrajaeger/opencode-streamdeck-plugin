@@ -4,9 +4,6 @@ import { OpenCodeStatus } from "./actions/opencode-status";
 import { KnownProjectPersistence, KnownProjectStore } from "./known-projects";
 import { StatusBridgeServer } from "./status-bridge-server.mjs";
 
-// We can enable "trace" logging so that all messages between the Stream Deck, and the plugin are recorded. When storing sensitive information
-streamDeck.logger.setLevel("trace");
-
 const statusAction = new OpenCodeStatus();
 const projectStatusAction = new OpenCodeProjectStatus();
 const statusBridge = new StatusBridgeServer();

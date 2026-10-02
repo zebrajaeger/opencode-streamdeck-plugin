@@ -72,7 +72,7 @@ test("notifies project subscribers only with their scoped aggregate status", () 
 	registry.apply(frame("session.status", { sessionID: "working", status: BridgeStatus.BUSY }));
 	registry.disconnect(INSTANCE);
 
-	assert.deepEqual(projectAStatuses, ["OFFLINE", "READY", "READY", "READY", "BUSY", "OFFLINE"]);
+	assert.deepEqual(projectAStatuses, ["OFFLINE", "READY", "BUSY", "OFFLINE"]);
 });
 
 test("displays an error immediately, then expires it after fifteen seconds", () => {
@@ -168,4 +168,62 @@ test("notifies subscribers when an error expires", () => {
 	registry.apply(frame("session.error", { sessionID: "failed" }));
 	clock.advance(ERROR_INDICATION_DURATION_MS);
 	assert.deepEqual(statuses, ["OFFLINE", "READY", "ERROR", "READY"]);
+});
+
+test("each subscriber gets initial delivery and only effective changes, including reentrant notifications", () => {
+	const { registry } = createRegistry();
+	const global = [], project = [], other = [];
+	registry.subscribe((status) => { global.push(status); registry.notify(); });
+	const unsubscribe = registry.subscribeProject("project", (status) => project.push(status));
+	registry.subscribeProject("other", (status) => other.push(status));
+	registry.connect(INSTANCE, "project");
+	for (let i = 0; i < 3; i++) {
+		registry.apply(frame("snapshot", { sessions: [], permissions: [], questions: [] }));
+		registry.apply(frame("session.idle", { sessionID: "session" }));
+	}
+	registry.connect("other", "other");
+	for (let i = 0; i < 3; i++) registry.apply(frame("session.status", { sessionID: "session", status: "busy" }));
+	registry.apply(frame("permission.asked", { instanceID: "other", sessionID: "other", permissionID: "permission" }));
+	assert.deepEqual(project, ["OFFLINE", "READY", "BUSY"]);
+	assert.deepEqual(global, ["OFFLINE", "READY", "BUSY", "ATTENTION"]);
+	assert.deepEqual(other, ["OFFLINE", "READY", "ATTENTION"]);
+	const fresh = [];
+	registry.subscribeProject("project", (status) => fresh.push(status));
+	assert.deepEqual(fresh, ["BUSY"]);
+	unsubscribe();
+	registry.disconnect(INSTANCE);
+	assert.deepEqual(project, ["OFFLINE", "READY", "BUSY"]);
+	assert.deepEqual(fresh, ["BUSY", "OFFLINE"]);
+});
+
+test("single-instance multi-session transitions and precedence are immediate without debounce", () => {
+	const { registry, clock } = createRegistry();
+	const statuses = [];
+	registry.subscribeProject("project", (status) => statuses.push(status));
+	registry.connect(INSTANCE, "project");
+	const apply = (type, properties) => registry.apply(frame(type, properties));
+	apply("session.status", { sessionID: "one", status: "busy" });
+	apply("session.status", { sessionID: "two", status: "busy" });
+	apply("session.idle", { sessionID: "one" });
+	assert.equal(statuses.at(-1), "BUSY");
+	apply("permission.asked", { permissionID: "permission", sessionID: "two" });
+	apply("question.asked", { questionID: "question", sessionID: "two" });
+	apply("permission.replied", { permissionID: "permission" });
+	assert.equal(statuses.at(-1), "ATTENTION");
+	apply("question.resolved", { questionID: "question" });
+	assert.equal(statuses.at(-1), "BUSY");
+	apply("session.error", { sessionID: "two" });
+	assert.equal(statuses.at(-1), "ERROR");
+	apply("session.status", { sessionID: "two", status: "busy" });
+	assert.equal(statuses.at(-1), "BUSY");
+	assert.equal(clock.timerCount, 0);
+	apply("session.error", { sessionID: "two" });
+	clock.advance(ERROR_INDICATION_DURATION_MS);
+	assert.equal(statuses.at(-1), "BUSY");
+	apply("session.idle", { sessionID: "two" });
+	assert.equal(statuses.at(-1), "READY");
+	registry.disconnect(INSTANCE);
+	assert.equal(statuses.at(-1), "OFFLINE");
+	assert.equal(clock.timerCount, 0);
+	assert.deepEqual(statuses, ["OFFLINE", "READY", "BUSY", "ATTENTION", "BUSY", "ERROR", "BUSY", "ERROR", "BUSY", "READY", "OFFLINE"]);
 });

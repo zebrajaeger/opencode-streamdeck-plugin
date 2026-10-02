@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Plugin } from "@opencode/plugin";
 import pino from "pino";
 
-import { BridgeStatus, PROTOCOL_VERSION } from "../shared/protocol.mjs";
+import { BridgeStatus, PROTOCOL_VERSION, SOURCE_SUPERSEDED_CLOSE_CODE } from "../shared/protocol.mjs";
 
 const BRIDGE_URL = "ws://127.0.0.1:20666";
 const WEB_SOCKET_OPEN = 1;
@@ -60,6 +60,7 @@ export class OpenCodeBridge {
 		this.reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
 		this.reconnectTimer = undefined;
 		this.disposed = false;
+		this.superseded = false;
 	}
 
 	async initialize() {
@@ -83,12 +84,13 @@ export class OpenCodeBridge {
 
 	connect() {
 		logger.debug({ instanceID: this.instanceID, directory: this.directory }, "Connecting to Stream Deck bridge");
-		if (this.disposed || this.socket) return;
+		if (this.disposed || this.superseded || this.socket) return;
 
 		try {
 			const socket = createWebSocket(BRIDGE_URL);
 			this.socket = socket;
 			socket.addEventListener("open", () => {
+				if (this.socket !== socket || this.disposed || this.superseded) return;
 				logger.info({ instanceID: this.instanceID, directory: this.directory, url: BRIDGE_URL }, "Connected to Stream Deck bridge");
 				this.reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
 				this.send({
@@ -98,12 +100,21 @@ export class OpenCodeBridge {
 				});
 				this.sendSnapshot();
 			});
-			socket.addEventListener("close", () => {
-				logger.warn({ instanceID: this.instanceID, directory: this.directory }, "Stream Deck bridge connection closed");
-				if (this.socket === socket) this.socket = undefined;
+			socket.addEventListener("close", (event) => {
+				if (this.socket !== socket || this.disposed || this.superseded) return;
+				this.socket = undefined;
+				if (event.code === SOURCE_SUPERSEDED_CLOSE_CODE) {
+					this.superseded = true;
+					if (this.reconnectTimer !== undefined) clearTimeout(this.reconnectTimer);
+					this.reconnectTimer = undefined;
+					logger.info({ instanceID: this.instanceID, directory: this.directory, closeCode: event.code, outcome: "superseded" }, "Stream Deck bridge source retired");
+					return;
+				}
+				logger.warn({ instanceID: this.instanceID, directory: this.directory, closeCode: event.code }, "Stream Deck bridge connection closed");
 				this.scheduleReconnect();
 			});
 			socket.addEventListener("error", () => {
+				if (this.socket !== socket || this.disposed || this.superseded) return;
 				logger.warn({ instanceID: this.instanceID, directory: this.directory }, "Stream Deck bridge connection error");
 				socket.close();
 			});
@@ -241,7 +252,7 @@ export class OpenCodeBridge {
 
 	scheduleReconnect() {
 		logger.debug({ delayMs: this.reconnectDelay }, "Scheduling Stream Deck bridge reconnect");
-		if (this.disposed || this.reconnectTimer) return;
+		if (this.disposed || this.superseded || this.reconnectTimer !== undefined) return;
 		this.reconnectTimer = setTimeout(() => {
 			this.reconnectTimer = undefined;
 			this.connect();
@@ -252,8 +263,11 @@ export class OpenCodeBridge {
 	dispose() {
 		logger.info({ instanceID: this.instanceID, directory: this.directory }, "Disposing Stream Deck status bridge");
 		this.disposed = true;
-		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-		this.socket?.close();
+		if (this.reconnectTimer !== undefined) clearTimeout(this.reconnectTimer);
+		this.reconnectTimer = undefined;
+		const socket = this.socket;
+		this.socket = undefined;
+		socket?.close();
 	}
 }
 

@@ -132,7 +132,13 @@ export class StatusRegistry {
 
 	/** @param {() => string} getStatus @param {(status: string) => void} listener */
 	subscribeToStatus(getStatus, listener) {
-		const notify = () => listener(getStatus());
+		let previousStatus;
+		const notify = () => {
+			const status = getStatus();
+			if (status === previousStatus) return;
+			previousStatus = status;
+			listener(status);
+		};
 		this.listeners.add(notify);
 		notify();
 		return () => this.listeners.delete(notify);
