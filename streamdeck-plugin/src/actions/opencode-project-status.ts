@@ -11,6 +11,8 @@ import type { TextPosition } from "../../de.lars-brandt.opencode.sdPlugin/proper
 export interface ProjectStatusSettings extends JsonObject {
 	projectID?: string;
 	projectName?: string;
+	nameFontSize?: number;
+	statusFontSize?: number;
 	namePosition?: TextPosition;
 	statusPosition?: TextPosition;
 }

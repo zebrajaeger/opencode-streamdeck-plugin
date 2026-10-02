@@ -11,14 +11,15 @@ from PySide6.QtSvg import QSvgRenderer
 app = QGuiApplication([])
 script = """
 import { projectStatusImage } from './src/actions/project-status-image.mjs';
+import { FONT_SIZES } from './de.lars-brandt.opencode.sdPlugin/property-inspector/project-presentation.mjs';
 const positions = ['top', 'middle', 'bottom'];
 const image = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144"><rect width="144" height="144" fill="#101216"/></svg>');
 const cases = [];
 for (const namePosition of positions) for (const statusPosition of positions) {
  if (namePosition === statusPosition) continue;
  for (const status of ['OFFLINE', 'READY', 'BUSY', 'ATTENTION', 'ERROR']) {
-  for (const projectName of ['Alpha', 'W'.repeat(100), '日本語テスト', 'one\\ntwo', '']) {
-   const svg = decodeURIComponent(projectStatusImage(image, status, {projectName, namePosition, statusPosition}).split(',')[1]);
+   for (const nameFontSize of FONT_SIZES) for (const statusFontSize of FONT_SIZES) for (const projectName of ['Alpha', 'W'.repeat(100), '日本語テスト', '😀'.repeat(100), 'one\\ntwo', '']) {
+    const svg = decodeURIComponent(projectStatusImage(image, status, {projectName, namePosition, statusPosition, nameFontSize, statusFontSize}).split(',')[1]);
    cases.push({namePosition, statusPosition, projectName, status, svg});
   }
  }

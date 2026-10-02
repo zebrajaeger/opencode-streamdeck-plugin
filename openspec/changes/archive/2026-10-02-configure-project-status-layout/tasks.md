@@ -21,3 +21,12 @@
 - [x] 4.1 Run the project's type checks, build, and complete tests from a temporary implementation copy before replacing live code; verify all commands pass and project-only manifest title settings are valid.
 - [ ] 4.2 Verify a newly configured running Stream Deck project view across all six position pairs and all five statuses, including BUSY readability, long names, inspector reopenings, plugin restart, and project changes; record observable results and confirm no duplicate native title or loss of project selection within the new configuration flow.
 - [ ] 4.3 Verify a global key and multiple project keys coexist without changed aggregation or presentation leakage; record the integration result and check acceptance scenarios against the delta specification.
+
+## 5. Independent font sizes (approved readability refinement)
+
+- [x] 5.1 Add independent nameFontSize and statusFontSize settings, shared supported size choices, and readable defaults; verify deterministic normalization of missing and unsupported values and independence per element and per key.
+- [x] 5.2 Add separate name/status font-size selections to the inspector; verify immediate saves, effective defaults, full-settings preservation through known/manual project changes, and restored selections after reopening.
+- [x] 5.3 Render each element at its selected fixed size without automatic shrinking or horizontal glyph compression; normalize name line breaks and shorten overflowing text with an ellipsis. Verify all six layouts, all supported sizes, long/wide/non-ASCII text, and blank names using SVG assertions and actual Qt-rendered pixels for visibility and region bounds.
+- [x] 5.4 Apply font-size updates immediately in static states and every BUSY frame; verify queued stale-frame protection, transitions, disappearance cleanup, independent project keys, and unchanged global presentation.
+- [x] 5.5 Run type checks, build, complete tests, manifest validation, and Qt pixel checks in a temporary implementation copy before publishing the font-size changes to live code.
+- [ ] 5.6 Verify readability and independent size changes on running Stream Deck keys, including BUSY, long names, inspector reopening, plugin restart, and project changes; record observable results without marking existing hardware acceptance tasks complete solely on automated evidence.

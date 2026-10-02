@@ -1,4 +1,4 @@
-import { normalizeProjectPresentation } from "./project-presentation.mjs";
+import { FONT_SIZES, normalizeProjectPresentation } from "./project-presentation.mjs";
 
 export function projectBasename(directory) {
 	return directory.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean).at(-1) || directory;
@@ -43,6 +43,16 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	const projectName = document.querySelector("#project-name");
 	const namePosition = document.querySelector("#name-position");
 	const statusPosition = document.querySelector("#status-position");
+	const nameFontSize = document.querySelector("#name-font-size");
+	const statusFontSize = document.querySelector("#status-font-size");
+	for (const select of [nameFontSize, statusFontSize]) {
+		for (const size of FONT_SIZES) {
+			const option = document.createElement("option");
+			option.value = String(size);
+			option.textContent = `${size} px`;
+			select.append(option);
+		}
+	}
 	const connection = inspectorRegistration(port, uuid, registerEvent, actionInfo);
 	const websocket = new WebSocket(connection.url);
 	const context = connection.context;
@@ -64,6 +74,8 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 		projectName.value = presentation.projectName;
 		namePosition.value = presentation.namePosition;
 		statusPosition.value = presentation.statusPosition;
+		nameFontSize.value = String(presentation.nameFontSize);
+		statusFontSize.value = String(presentation.statusFontSize);
 		for (const option of namePosition.options) option.disabled = option.value === presentation.statusPosition;
 		for (const option of statusPosition.options) option.disabled = option.value === presentation.namePosition;
 	}
@@ -117,6 +129,8 @@ function setupInspector(port, uuid, registerEvent, actionInfo) {
 	projectName.addEventListener("change", () => save({ projectName: projectName.value }));
 	namePosition.addEventListener("change", () => save({ namePosition: namePosition.value }));
 	statusPosition.addEventListener("change", () => save({ statusPosition: statusPosition.value }));
+	nameFontSize.addEventListener("change", () => save({ nameFontSize: Number(nameFontSize.value) }));
+	statusFontSize.addEventListener("change", () => save({ statusFontSize: Number(statusFontSize.value) }));
 	renderProjects();
 	renderPresentation();
 }

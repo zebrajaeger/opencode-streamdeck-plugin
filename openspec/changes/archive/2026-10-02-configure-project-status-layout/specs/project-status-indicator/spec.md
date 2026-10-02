@@ -55,19 +55,19 @@ The name and status SHALL NOT occupy the same position. Each position selector S
 - **AND** the configuration shows the same effective positions as the key
 
 ### Requirement: Persistent project-view presentation
-The project-status action SHALL persist its configured name and position pair per key across inspector reopenings and plugin restarts. Editing the name or layout SHALL preserve project selection and unrelated action settings. Changing project selection SHALL preserve the configured name and layout.
+The project-status action SHALL persist its configured name, position pair, and independent name/status font sizes per key across inspector reopenings and plugin restarts. Editing the name, layout, or either font size SHALL preserve project selection and unrelated action settings. Changing project selection SHALL preserve the configured name, layout, and both font sizes.
 
 #### Scenario: Configuration is reopened after restart
 - **WHEN** the user reopens a configured project-status action after a plugin restart
-- **THEN** the saved name and position selections are restored in both the configuration and key display
+- **THEN** the saved name, position selections, and both font sizes are restored in both the configuration and key display
 
 #### Scenario: Presentation settings are saved
-- **WHEN** the user saves a name or position change
+- **WHEN** the user saves a name, position, or font-size change
 - **THEN** the action retains its selected project ID and unrelated settings
 
 #### Scenario: Project selection is changed
 - **WHEN** the user selects a different known project or saves a manual project ID
-- **THEN** the action retains its configured name and position pair
+- **THEN** the action retains its configured name, position pair, and both font sizes
 - **AND** the displayed status changes to that of the newly selected project
 
 ### Requirement: Layout remains visible in every status
@@ -84,7 +84,40 @@ The project-status action SHALL show the current status text at its configured p
 #### Scenario: Name exceeds available space
 - **WHEN** the configured name is too long or contains multiple lines
 - **THEN** its display remains within the selected name region without obscuring the status region
+- **AND** line breaks are normalized and overflowing text is shortened with an ellipsis without reducing its selected font size
 
 #### Scenario: Global and project keys coexist
 - **WHEN** a global status key and a project-status key are visible together
 - **THEN** the global key retains its existing presentation and aggregation behavior while the project key uses its configured layout
+
+### Requirement: Independently configurable name and status font sizes
+The project-status configuration SHALL provide separate font-size selections for project name and status. Each selection SHALL be persisted per key and SHALL update the displayed text immediately without requiring a status transition. The chosen font size SHALL remain fixed regardless of text length; text exceeding the available region SHALL be shortened with an ellipsis rather than rendered at a smaller size or horizontally compressed. Supported sizes SHALL keep both elements within their separate regions. Missing or unsupported size settings SHALL resolve consistently in the inspector and runtime to readable defaults. These controls SHALL NOT change the global key's presentation.
+
+#### Scenario: User changes the project-name size
+- **WHEN** the user chooses a different project-name font size while status is unchanged
+- **THEN** the key immediately renders the name at that size
+- **AND** the status font size, position selections, and project ID are unchanged
+
+#### Scenario: User changes the status size
+- **WHEN** the user chooses a different status font size
+- **THEN** the key immediately renders the status at that size
+- **AND** the name font size is unchanged
+
+#### Scenario: Font size changes during BUSY
+- **WHEN** the user changes either font size while BUSY animation is running
+- **THEN** subsequent displayed frames use the updated size for that element
+- **AND** queued stale frames do not restore the previous presentation
+
+#### Scenario: Long name at a chosen size
+- **WHEN** the configured name exceeds the available width at the selected font size
+- **THEN** the key displays a shortened name with an ellipsis at that same font size
+- **AND** the name remains inside its own region without obscuring status
+
+#### Scenario: Defaults or unsupported sizes are loaded
+- **WHEN** a key loads missing or unsupported font-size settings
+- **THEN** its name and status use the corresponding readable default sizes
+- **AND** the inspector selects the same effective sizes as the key
+
+#### Scenario: Keys have independent font sizes
+- **WHEN** two project-status keys have different saved name and status sizes
+- **THEN** each key renders its own selected sizes without affecting the other key or a global key

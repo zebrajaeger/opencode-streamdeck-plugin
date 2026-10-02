@@ -12,12 +12,13 @@ The inspector currently builds replacement settings containing only projectID. T
 - Keep presentation state isolated per key and independent from status aggregation.
 - Make layout normalization and SVG text composition deterministic and directly testable.
 - Preserve animation cancellation and stale-frame protection when layout changes.
+- Allow independent, readable font sizes for name and status without automatic shrinking.
 
 **Non-Goals:**
 - Native Stream Deck title styling, automatic directory-derived names, or automatic import of existing native titles.
 - Migration or compatibility handling for project-key configurations created before this change, including saved native custom titles.
 - Changes to the global action, bridge protocol, project identity, status precedence, or animation timing.
-- User-controlled font styling or graphics positions.
+- User-controlled font family, color, weight, or graphics positions; independent font sizes are in scope.
 
 ## Decisions
 
@@ -33,6 +34,8 @@ Alternatives: keeping the name native cannot honor the independent position sele
 
 Extend ProjectStatusSettings with projectName, namePosition, and statusPosition. Positions use top, middle, and bottom. Missing names normalize to an empty string; missing or unsupported positions use name=bottom and status=middle. If individually normalized positions collide, preserve the status position and choose bottom for the name unless bottom is occupied, in which case choose middle. Thus malformed settings always produce a deterministic distinct pair.
 
+Also persist independent nameFontSize and statusFontSize settings. Provide a bounded selection of numeric sizes appropriate to the 144 by 144 image and its text bands. Choose readable defaults and the supported size set during implementation, checking actual Qt-rendered output; missing or unsupported sizes normalize independently to the corresponding default. Use the same size options and normalization boundary in the inspector and runtime. Never infer one element's size from the other or from its text length.
+
 Share the normalization contract between inspector and runtime through a small testable boundary compatible with the inspector's browser module and the project's TypeScript build. Use the same fixtures to prevent drift if build constraints require separate adapters. Normalization must not overwrite unknown settings.
 
 Keep a complete current-settings snapshot in the inspector and merge only changed fields. Both project selection paths must preserve presentation and unrelated fields. Persist and render changes per action ID, never through a renderer-wide name or layout value.
@@ -41,7 +44,9 @@ Alternative: global presentation settings would couple otherwise independent pro
 
 ### 3. Three bounded text regions
 
-Use the existing 144 by 144 coordinate system and define non-overlapping top, middle, and bottom text bands with horizontally centered text. Keep both labels inside their assigned bands; normalize line breaks for a single-line name and fit or truncate long names with an ellipsis. Exact font size and band padding can be tuned during visual verification without changing the behavioral contract. Reserve sufficient contrast behind text so particles and static graphics do not impair readability.
+Use the existing 144 by 144 coordinate system and define non-overlapping top, middle, and bottom text bands with horizontally centered text. Keep both labels inside their assigned bands; normalize line breaks for a single-line name and truncate text exceeding the available width with an ellipsis at the selected font size. Do not automatically shrink text or use horizontal glyph compression to fit it. Bound each supported size vertically and determine truncation for its horizontal space, including wide and non-ASCII glyphs. Band padding and the supported size range can be tuned during visual verification without changing the fixed-size contract. Reserve sufficient contrast behind text so particles and static graphics do not impair readability.
+
+Use flat SVG groups supported by Stream Deck's Qt renderer, not nested SVG viewports: the initial nested-viewport implementation produced valid SVG but invisible text in Qt. Pixel-based Qt tests must verify visible text and region bounds, not merely the presence of text elements in the SVG source.
 
 Escape all user text as XML text before composing SVG; names containing &, <, >, quotes, or non-ASCII characters must remain literal content, not markup. Status values come from the existing status type.
 
@@ -49,7 +54,7 @@ Alternative: unrestricted multiline SVG text can occupy neighboring regions and 
 
 ### 4. Compose static and animated images through the same layout boundary
 
-Add a project-specific presentation path rather than changing the global action's default rendering. Static status images and every BUSY frame must use the same text compositor and effective layout. A layout/name update triggers a redraw immediately, even if status has not changed. Active animation frames must use the current presentation, and queued old frames must not overwrite a newer layout or a subsequent static status.
+Add a project-specific presentation path rather than changing the global action's default rendering. Static status images and every BUSY frame must use the same text compositor and effective layout, including independent font sizes. A layout/name/font-size update triggers a redraw immediately, even if status has not changed. Active animation frames must use the current presentation, and queued old frames must not overwrite a newer layout or font size or a subsequent static status.
 
 Reuse the particle engine and its generation/serialized-write lifecycle where practical; keep text composition separate from particle movement. Existing global renderer behavior must remain the default when no project presentation is supplied.
 
@@ -59,7 +64,7 @@ Alternative: drawing labels once after starting the animation fails because the 
 
 - [Native overlays could compete with composed text] -> Verify a newly configured view on hardware and in the Stream Deck software with native title display disabled; legacy native-title configurations are not an acceptance gate.
 - [Settings replacement loses fields] -> Merge snapshots and test both known-project and manual-ID selection after configuring presentation.
-- [Text is less customizable than native titles] -> Keep styling intentionally fixed; verify long names and ATTENTION at all three positions.
+- [Large text exceeds its region] -> Offer bounded independent size choices and truncate at the chosen size; verify long names and ATTENTION at all three positions without shrinking or overlap.
 - [Animation race causes old layouts to reappear] -> Extend stale-frame tests to layout changes during BUSY and subsequent status transitions.
 - [Shared renderer accidentally changes global keys] -> Run existing tests and explicitly verify a global and project key together.
 
@@ -69,3 +74,4 @@ Alternative: drawing labels once after starting the animation fails because the 
 2. Configure new project views with status=middle, name=bottom, and an initially blank name. Do not add conversion logic for pre-existing key configurations.
 3. Verify newly configured views, inspector reopening, and plugin restart on Stream Deck. Persistence of views configured with the new version remains required.
 4. Roll back the plugin build if verification fails; no cross-version settings migration or rollback compatibility is required.
+5. Verify every supported name/status font size in Qt and on Stream Deck, including size updates during BUSY, inspector reopening, plugin restart, and project changes without losing either size selection.

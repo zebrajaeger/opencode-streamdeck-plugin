@@ -23,11 +23,13 @@ for (const status of ["OFFLINE", "READY", "ATTENTION", "ERROR"]) {
 		await renderer.renderStatus(action, status);
 		assert.match(decode(action.images.at(-1)), new RegExp(`>${status}<`));
 		assert.match(decode(action.images.at(-1)), />Alpha</);
-		renderer.configureProject(action.id, { projectName: "Beta", namePosition: "top", statusPosition: "bottom" });
+		renderer.configureProject(action.id, { projectName: "Beta", namePosition: "top", statusPosition: "bottom", nameFontSize: 28, statusFontSize: 16 });
 		await renderer.renderStatus(action, status);
 		assert.match(decode(action.images.at(-1)), /data-label="name" data-position="top"/);
 		assert.match(decode(action.images.at(-1)), /data-label="status" data-position="bottom"/);
 		assert.match(decode(action.images.at(-1)), />Beta</);
+		assert.match(decode(action.images.at(-1)), /data-label="name"[^]*?font-size="28"/);
+		assert.match(decode(action.images.at(-1)), /data-label="status"[^]*?font-size="16"/);
 		assert.deepEqual(action.titles, []);
 	});
 }
@@ -43,7 +45,7 @@ test("each BUSY frame uses live presentation; queued stale frames cannot overwri
 	await renderer.renderStatus(action, "BUSY");
 	await flush();
 	t.mock.timers.tick(PARTICLE_WAIT_ANIMATION.frameIntervalMs * 3);
-	renderer.configureProject(action.id, { projectName: "New", namePosition: "top", statusPosition: "bottom" });
+	renderer.configureProject(action.id, { projectName: "New", namePosition: "top", statusPosition: "bottom", nameFontSize: 28, statusFontSize: 24 });
 	const changed = renderer.renderStatus(action, "BUSY");
 	release();
 	await changed;
@@ -57,12 +59,15 @@ test("each BUSY frame uses live presentation; queued stale frames cannot overwri
 		assert.match(svg, />BUSY</);
 		assert.match(svg, /data-label="status" data-position="bottom"/);
 		assert.doesNotMatch(svg, />Old</);
+		assert.match(svg, /data-label="name"[^]*?font-size="28"/);
+		assert.match(svg, /data-label="status"[^]*?font-size="24"/);
 	}
 	await renderer.renderStatus(action, "READY");
 	t.mock.timers.tick(PARTICLE_WAIT_ANIMATION.frameIntervalMs * 3);
 	await flush();
 	assert.match(decode(action.images.at(-1)), />New</);
 	assert.match(decode(action.images.at(-1)), />READY</);
+	assert.match(decode(action.images.at(-1)), /data-label="name"[^]*?font-size="28"/);
 	assert.doesNotMatch(decode(action.images.at(-1)), />BUSY</);
 	assert.deepEqual(action.titles, []);
 });
@@ -94,14 +99,16 @@ test("two independent project layouts coexist with the unchanged global presenta
 	t.mock.timers.enable({ apis: ["setInterval"] });
 	const renderer = new StatusActionRenderer(), first = key("a"), second = key("b"), global = key("global");
 	t.after(async () => { for (const action of [first, second, global]) await renderer.dispose(action.id); });
-	renderer.configureProject(first.id, { projectName: "Alpha", namePosition: "top", statusPosition: "middle" });
-	renderer.configureProject(second.id, { projectName: "Beta", namePosition: "middle", statusPosition: "bottom" });
+	renderer.configureProject(first.id, { projectName: "Alpha", namePosition: "top", statusPosition: "middle", nameFontSize: 28, statusFontSize: 16 });
+	renderer.configureProject(second.id, { projectName: "Beta", namePosition: "middle", statusPosition: "bottom", nameFontSize: 16, statusFontSize: 28 });
 	renderer.setStatus("BUSY", [first, second, global]);
 	await flush();
 	t.mock.timers.tick(PARTICLE_WAIT_ANIMATION.frameIntervalMs);
 	await flush();
 	assert.match(decode(first.images.at(-1)), /data-label="name" data-position="top"/);
 	assert.match(decode(second.images.at(-1)), /data-label="name" data-position="middle"/);
+	assert.match(decode(first.images.at(-1)), /data-label="name"[^]*?font-size="28"/);
+	assert.match(decode(second.images.at(-1)), /data-label="name"[^]*?font-size="16"/);
 	assert.doesNotMatch(decode(global.images.at(-1)), /<text/);
 	assert.deepEqual(global.titles, ["BUSY"]);
 	assert.deepEqual(first.titles, []);
