@@ -3,7 +3,7 @@ import type { JsonObject } from "@elgato/utils";
 
 import type { GlobalStatusValue } from "../status-types";
 import type { KnownProject } from "../known-projects";
-import { StatusActionRenderer } from "./particle-wait-animation";
+import { StatusActionRenderer } from "./status-action-renderer";
 import { ProjectSelector } from "./project-selector";
 import { ProjectStatusSubscriptions } from "./project-status-subscriptions";
 import type { TextPosition } from "../../de.lars-brandt.opencode.sdPlugin/property-inspector/project-presentation.mjs";

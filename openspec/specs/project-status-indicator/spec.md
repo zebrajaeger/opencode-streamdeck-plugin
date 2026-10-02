@@ -160,7 +160,7 @@ The system SHALL retain the existing global status action, and it SHALL continue
 - **THEN** each action updates according to its own aggregation scope
 
 ### Requirement: Stable presentation for a single project instance
-With one OpenCode instance for the configured project, the project-status action SHALL retain its displayed effective status while the reported aggregate remains unchanged. Repeated identical reports SHALL NOT rewrite an unchanged static image or title, restart the BUSY animation, or introduce artificial READY, BUSY, or OFFLINE transitions. Legitimate status transitions SHALL remain immediate, without added debounce or minimum-display delays. Simultaneous OpenCode instances of the same project are outside this requirement's acceptance scope.
+With one OpenCode instance for the configured project, the project-status action SHALL retain its displayed effective status while the reported aggregate remains unchanged. Repeated identical reports SHALL NOT rewrite an unchanged static image or title, restart the BUSY or ATTENTION animation, reset an active animation's phase, or introduce artificial READY, BUSY, ATTENTION, or OFFLINE transitions. Legitimate status transitions SHALL remain immediate, without added debounce or minimum-display delays. Simultaneous OpenCode instances of the same project are outside this requirement's acceptance scope.
 
 #### Scenario: Connected project remains inactive
 - **WHEN** a connected project's single source remains idle and repeatedly reports unchanged state
@@ -182,6 +182,10 @@ With one OpenCode instance for the configured project, the project-status action
 #### Scenario: Attention, failure, or disconnection is real
 - **WHEN** the configured project's effective status changes because of an attention request, execution failure, error expiry, or connection loss
 - **THEN** the key promptly displays the new status according to the existing precedence and expiry rules
+
+#### Scenario: Connected project remains in attention
+- **WHEN** a connected project's single source repeatedly reports unresolved attention without changing its effective status
+- **THEN** its halo continues without resetting its phase or rewriting its unchanged title
 
 ### Requirement: Initial and explicit presentation refreshes remain available
 Status subscriptions SHALL deliver an initial effective status and subsequent changed effective statuses independently for each scope. A newly visible or reappearing project key SHALL render its current status even when that status has not changed. Explicit changes to project selection or presentation SHALL NOT be suppressed by unchanged-status detection.
@@ -353,3 +357,18 @@ The project-status configuration SHALL provide separate font-size selections for
 #### Scenario: Keys have independent font sizes
 - **WHEN** two project-status keys have different saved name and status sizes
 - **THEN** each key renders its own selected sizes without affecting the other key or a global key
+
+### Requirement: Project attention background
+Every visible project status key whose configured project has effective status `ATTENTION` SHALL display the continuous orange attention halo defined by `status-background-animation`. It SHALL stop the halo when that project's effective status changes, and SHALL NOT change presentation because another project's requests change without affecting the configured project's status.
+
+#### Scenario: Configured project has an unanswered agent question
+- **WHEN** an admitted unanswered agent question makes the configured project's effective status `ATTENTION`
+- **THEN** the project's key displays `ATTENTION` with the halo until its effective status changes
+
+#### Scenario: Configured project has an unanswered permission request
+- **WHEN** an admitted unanswered permission request makes the configured project's effective status `ATTENTION`
+- **THEN** the project's key displays `ATTENTION` with the halo
+
+#### Scenario: Foreign attention does not animate a ready project
+- **WHEN** another project needs attention while the configured project remains `READY`
+- **THEN** the configured project's key retains its static `READY` presentation

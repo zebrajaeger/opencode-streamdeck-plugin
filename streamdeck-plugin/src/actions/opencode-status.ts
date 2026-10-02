@@ -2,7 +2,7 @@ import { action, SingletonAction, type KeyAction, type WillAppearEvent, type Wil
 import type { JsonObject } from "@elgato/utils";
 
 import type { GlobalStatusValue } from "../status-types";
-import { StatusActionRenderer } from "./particle-wait-animation";
+import { StatusActionRenderer } from "./status-action-renderer";
 
 /** A display-only, global summary of every locally connected OpenCode bridge. */
 @action({ UUID: "de.lars-brandt.opencode.status" })

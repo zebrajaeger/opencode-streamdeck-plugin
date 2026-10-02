@@ -27,11 +27,11 @@ The system SHALL display `BUSY` when one or more connected OpenCode sessions are
 - **THEN** the status action displays one global `BUSY` state with the particle-network wait animation
 
 ### Requirement: Attention status for permission requests
-The system SHALL display `ATTENTION` while one or more connected OpenCode instances have an unanswered permission request or an unanswered agent question.
+The system SHALL display `ATTENTION` while one or more connected OpenCode instances have an unanswered permission request or an unanswered agent question. Every visible global status key in this state SHALL display the continuous orange attention halo defined by `status-background-animation`.
 
 #### Scenario: Permission request arrives while a session is working
 - **WHEN** a connected instance reports an unanswered permission request while any session is working
-- **THEN** the status action displays `ATTENTION`
+- **THEN** the status action displays `ATTENTION` with the attention halo
 
 #### Scenario: Permission request is answered
 - **WHEN** the final unanswered permission request is answered and no error or working session remains
@@ -39,7 +39,7 @@ The system SHALL display `ATTENTION` while one or more connected OpenCode instan
 
 #### Scenario: Agent question arrives while a session is working
 - **WHEN** a connected instance reports an unanswered agent question while any session is working
-- **THEN** the status action displays `ATTENTION`
+- **THEN** the status action displays `ATTENTION` with the attention halo
 
 #### Scenario: Agent question is resolved
 - **WHEN** the final unanswered permission request or agent question is answered or rejected and no error or working session remains
@@ -47,7 +47,7 @@ The system SHALL display `ATTENTION` while one or more connected OpenCode instan
 
 #### Scenario: Multiple attention requests coexist
 - **WHEN** a connected instance has unanswered permission requests and agent questions
-- **THEN** the status action continues to display `ATTENTION` until every unanswered permission request and agent question is resolved
+- **THEN** the status action continues to display `ATTENTION` with the attention halo until every unanswered permission request and agent question is resolved
 
 ### Requirement: Error status aggregation
 The system SHALL display `ERROR` immediately after a connected instance reports an execution failure or compaction failure when no unanswered permission request or agent question exists. Reporting either failure SHALL end the affected session's previously reported working contribution without requiring a subsequent idle event. The failure indication SHALL expire after 15 seconds unless a newer live-status event replaces it first, and it SHALL NOT be represented as persistent session state. Other sessions' working contributions and outstanding attention requests SHALL remain unchanged. A subsequent working or retry event SHALL be permitted to restore the affected session's working contribution.

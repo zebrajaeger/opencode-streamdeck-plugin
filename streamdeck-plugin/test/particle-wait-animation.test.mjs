@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PARTICLE_WAIT_ANIMATION, ParticleWaitAnimation, StatusActionRenderer } from "../src/actions/particle-wait-animation.ts";
+import { PARTICLE_WAIT_ANIMATION, ParticleWaitAnimation } from "../src/actions/particle-wait-animation.ts";
+import { StatusActionRenderer } from "../src/actions/status-action-renderer.ts";
+import { BackgroundAnimation } from "../src/actions/background-animation.ts";
 
 function action(id) {
 	return {
@@ -32,9 +34,9 @@ async function flush() {
 
 test("renders advancing particle-network SVG frames with centrally defined parameters", () => {
 	const key = action("one");
-	const animation = new ParticleWaitAnimation(key, { random: () => 0 });
+	const animation = new ParticleWaitAnimation(() => 0);
 	const firstFrame = decodeImage(animation.frame());
-	animation.advanceParticles();
+	animation.advance();
 	const secondFrame = decodeImage(animation.frame());
 
 	assert.match(firstFrame, /<circle /);
@@ -47,8 +49,7 @@ test("starts, stops, and suppresses a queued frame after disposal", async () => 
 	const key = action("one");
 	let scheduled;
 	let cancelled;
-	const animation = new ParticleWaitAnimation(key, {
-		random: () => 0,
+	const animation = new BackgroundAnimation(new ParticleWaitAnimation(() => 0), (background) => key.setImage(background), {
 		schedule: (callback) => {
 			scheduled = callback;
 			return "timer";
@@ -181,9 +182,10 @@ test("static and BUSY reappearance invalidate caches for the same object and reu
 
 for (const stage of ["setTitle", "setImage"]) {
 	for (const rejected of [false, true]) {
-		test(`deferred ${stage} (${rejected ? "rejected" : "resolved"}) cannot overwrite a newer transition`, async () => {
+		test(`deferred ${stage} (${rejected ? "rejected" : "resolved"}) cannot overwrite a newer transition`, async (t) => {
 			const renderer = new StatusActionRenderer();
 			const key = action("key");
+			t.after(() => renderer.dispose(key.id));
 			const gate = deferred();
 			const original = key[stage].bind(key);
 			let first = true;
@@ -222,9 +224,10 @@ for (const stage of ["setTitle", "setImage"]) {
 	});
 }
 
-test("disappearance invalidates queued work and serializes reuse behind an already issued write", async () => {
+test("disappearance invalidates queued work and serializes reuse behind an already issued write", async (t) => {
 	const renderer = new StatusActionRenderer();
 	const old = action("reused"), fresh = action("reused");
+	t.after(() => renderer.dispose(fresh.id));
 	const gate = deferred();
 	old.setImage = async (image) => { await gate.promise; old.images.push(image); };
 	renderer.setStatus("READY", [old]);
@@ -237,6 +240,7 @@ test("disappearance invalidates queued work and serializes reuse behind an alrea
 	assert.deepEqual(fresh.images, []);
 	gate.resolve();
 	await appeared;
+	await flush();
 	assert.deepEqual(old.titles, ["READY"]);
 	assert.equal(fresh.titles.at(-1), "ATTENTION");
 	assert.match(decodeImage(fresh.images.at(-1)), /#E69500/);

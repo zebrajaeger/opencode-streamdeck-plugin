@@ -1,0 +1,34 @@
+Changes: 18 files, 190 symbols
+Affected processes: 26
+Risk level: critical
+
+Changed symbols:
+  Section OpenCode Stream Deck status bridge ÔåÆ docs/opencode-status-bridge.md
+  Section Status backgrounds ÔåÆ docs/opencode-status-bridge.md
+  Section 1. Safe implementation setup ÔåÆ openspec/changes/add-attention-background-animation/tasks.md
+  Section 2. Shared background animation boundary ÔåÆ openspec/changes/add-attention-background-animation/tasks.md
+  Section 3. Attention halo and effect selection ÔåÆ openspec/changes/add-attention-background-animation/tasks.md
+  Section 4. Global and project integration coverage ÔåÆ openspec/changes/add-attention-background-animation/tasks.md
+  Section 5. End-to-end verification and delivery ÔåÆ openspec/changes/add-attention-background-animation/tasks.md
+  Section Attention background verification ÔåÆ openspec/changes/add-attention-background-animation/verification.md
+  Section Baseline and isolation ÔåÆ openspec/changes/add-attention-background-animation/verification.md
+  Section Upstream impact ÔåÆ openspec/changes/add-attention-background-animation/verification.md
+  Section Software verification ÔåÆ openspec/changes/add-attention-background-animation/verification.md
+  Section Delivery / visual verification ÔåÆ openspec/changes/add-attention-background-animation/verification.md
+  Const ATTENTION_HALO_ANIMATION ÔåÆ streamdeck-plugin/src/actions/attention-halo-animation.ts
+  Class AttentionHaloAnimation ÔåÆ streamdeck-plugin/src/actions/attention-halo-animation.ts
+  Property frameIntervalMs ÔåÆ streamdeck-plugin/src/actions/attention-halo-animation.ts
+... and 175 more
+
+Affected execution flows:
+  ÔÇó Refresh ÔåÆ Now (4 steps) ÔÇö changed: now, render, refresh, background
+  ÔÇó Refresh ÔåÆ Distance (4 steps) ÔÇö changed: distance, background, render, refresh
+  ÔÇó OnDidReceiveSettings ÔåÆ Write (4 steps) ÔÇö changed: write, render, renderStatus
+  ÔÇó OnDidReceiveSettings ÔåÆ SetImage (4 steps) ÔÇö changed: render, renderStatus, setImage
+  ÔÇó OnDidReceiveSettings ÔåÆ SetTitle (4 steps) ÔÇö changed: render, renderStatus, setTitle
+  ÔÇó Dispose ÔåÆ Cancel (3 steps) ÔÇö changed: cancel, dispose, stop
+  ÔÇó Refresh ÔåÆ Background (3 steps) ÔÇö changed: render, refresh, background
+  ÔÇó Refresh ÔåÆ Deliver (3 steps) ÔÇö changed: deliver, render, refresh
+  ÔÇó Constructor ÔåÆ Random (3 steps) ÔÇö changed: random, createParticle, constructor
+  ÔÇó Start ÔåÆ Now (4 steps) ÔÇö changed: now, render, start, background
+... and 16 more

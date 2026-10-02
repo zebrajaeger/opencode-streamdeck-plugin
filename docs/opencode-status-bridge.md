@@ -113,6 +113,32 @@ or transient errors from another project. The existing **OpenCode Status** key
 remains the aggregate of every connected local bridge, including older bridges
 that do not provide a project ID.
 
+## Status backgrounds
+
+Both **OpenCode Status** and **OpenCode Project Status** show the existing blue
+particle network during `BUSY` (one frame every 180 ms). During `ATTENTION`, an
+orange radial halo smoothly pulses over a 2.4-second cycle, refreshed every
+100 ms. It continues for the full attention state, including multiple pending
+permission requests or agent questions, until the last outstanding request is
+resolved. If work is still running, particles resume; otherwise the applicable
+static `READY`, `ERROR`, or `OFFLINE` presentation takes over.
+
+The attention glyph and status text stay steady throughout the pulse. Project
+name/status overlays and their configured layout are composed on every frame;
+the global action retains its native title behavior. Project A's attention
+animates A's key and the global key, not an unaffected ready project B.
+
+Each visible animated key has its own lifecycle. Duplicate reports do not reset
+the animation or rewrite unchanged titles. Presentation refreshes retain the
+current effect phase; disappearing keys release their timers and reappearing
+keys immediately render the current status. Failed image writes do not prevent
+later frames or transitions. Slow already-issued writes are allowed to settle
+before the latest presentation; queued obsolete frames are suppressed.
+
+These backgrounds add no settings, runtime dependencies, protocol commands,
+audio, or interactions. Both actions remain display-only; aggregation and
+permission/question lifecycles are unchanged.
+
 ## Duplicate plugin-load diagnosis
 
 The Stream Deck bridge accepts one active status source for each exact OpenCode

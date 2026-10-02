@@ -3,11 +3,63 @@ import { once } from "node:events";
 import test from "node:test";
 
 import { OpenCodeBridge } from "../../opencode-plugin/index.mjs";
-import { StatusActionRenderer } from "../src/actions/particle-wait-animation.ts";
+import { StatusActionRenderer } from "../src/actions/status-action-renderer.ts";
 import { ProjectStatusSubscriptions } from "../src/actions/project-status-subscriptions.ts";
 import { StatusBridgeServer } from "../src/status-bridge-server.mjs";
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test("admitted permission and question requests keep global/project halos continuous through partial resolution and restore still-running work", async (t) => {
+	const server = new StatusBridgeServer({ port: 0 });
+	await once(server.server, "listening");
+	t.after(() => server.close());
+	const original = globalThis.WebSocket;
+	globalThis.WebSocket = class {
+		readyState = 0; listeners = new Map();
+		constructor() { this.peer = { close: (code) => this.close(code) }; }
+		addEventListener(type, listener) { this.listeners.set(type, listener); }
+		open() { this.readyState = 1; this.listeners.get("open")(); }
+		send(payload) { server.handleMessage(this.peer, payload); }
+		close(code = 1000) { this.readyState = 3; server.handleClose(this.peer); this.listeners.get("close")({ code }); }
+	};
+	t.after(() => { globalThis.WebSocket = original; });
+	const bridges = [];
+	for (const projectID of ["A", "B"]) {
+		const bridge = new OpenCodeBridge({ location: { directory: `C:\\work\\${projectID}`, project: { id: projectID } }, session: { get: async ({ sessionID }) => ({ id: sessionID, projectID: sessionID === "a" ? "A" : "B" }) }, permission: { request: { list: async () => ({ data: [] }) } } });
+		bridges.push(bridge); t.after(() => bridge.dispose());
+		await bridge.initialize(); bridge.socket.open(); await bridge.work;
+	}
+	t.mock.timers.enable({ apis: ["setInterval"] });
+	let now = 0;
+	const renderer = new StatusActionRenderer({ now: () => now });
+	const key = (id) => ({ id, images: [], titles: [], async setImage(image) { this.images.push(image); }, async setTitle(title) { this.titles.push(title); } });
+	const a = key("A"), b = key("B"), global = key("global");
+	renderer.configureProject(a.id, { projectName: "Alpha" }); renderer.configureProject(b.id, { projectName: "Beta" });
+	const off = [server.subscribeProject("A", (status) => renderer.setStatus(status, [a])), server.subscribeProject("B", (status) => renderer.setStatus(status, [b])), server.subscribe((status) => renderer.setStatus(status, [global]))];
+	t.after(async () => { off.forEach((dispose) => dispose()); for (const action of [a, b, global]) await renderer.dispose(action.id); });
+	const feed = async (type, data) => { await Promise.all(bridges.map((bridge) => bridge.handleEvent({ type, data }))); await flush(); };
+	const svg = (action) => decodeURIComponent(action.images.at(-1).split(",")[1]);
+	await flush(); const readyB = [...b.images];
+	await feed("session.execution.started", { sessionID: "a" });
+	await feed("permission.asked", { id: "permission", sessionID: "a" });
+	await feed("question.asked", { id: "question", sessionID: "a" });
+	const attentionTitles = [...global.titles];
+	for (let i = 0; i < 60; i++) {
+		const previous = a.images.at(-1);
+		now += 100; t.mock.timers.tick(100); await flush();
+		assert.notEqual(a.images.at(-1), previous); assert.match(svg(a), /radialGradient/); assert.match(svg(global), /radialGradient/);
+		assert.match(svg(a), />Alpha</); assert.match(svg(a), />ATTENTION</);
+		await feed("session.status", { sessionID: "a", status: { type: "busy" } });
+		if (i === 20) await feed("permission.replied", { requestID: "permission", sessionID: "a", reply: "once" });
+		assert.equal(server.registry.projectStatus("A"), "ATTENTION");
+	}
+	assert.deepEqual(b.images, readyB); assert.deepEqual(global.titles, attentionTitles);
+	await feed("question.rejected", { requestID: "question", sessionID: "a" });
+	assert.equal(server.registry.projectStatus("A"), "BUSY"); assert.match(svg(a), /<line /); assert.doesNotMatch(svg(global), /radialGradient/);
+	await feed("session.idle", { sessionID: "a" }); assert.equal(renderer.animationCount, 0);
+	await feed("form.created", { form: { id: "form", sessionID: "a" } }); assert.match(svg(global), /radialGradient/);
+	await feed("form.replied", { id: "form", sessionID: "a" }); assert.equal(server.registry.projectStatus("A"), "READY"); assert.equal(renderer.animationCount, 0);
+});
 
 test("accidental duplicate setups retire once and replacement owns project/global reports beyond retry intervals", async (t) => {
 	const server = new StatusBridgeServer({ port: 0 });

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { StatusActionRenderer, PARTICLE_WAIT_ANIMATION } from "../src/actions/particle-wait-animation.ts";
+import { StatusActionRenderer } from "../src/actions/status-action-renderer.ts";
+import { PARTICLE_WAIT_ANIMATION } from "../src/actions/particle-wait-animation.ts";
 
 const decode = (image) => decodeURIComponent(image.split(",")[1]);
 const flush = async () => { await new Promise(setImmediate); await new Promise(setImmediate); };
@@ -17,10 +18,12 @@ test("only the project manifest disables native titles", async () => {
 });
 
 for (const status of ["OFFLINE", "READY", "ATTENTION", "ERROR"]) {
-	test(`project ${status} includes name/status and redraws without a transition or native title`, async () => {
+	test(`project ${status} includes name/status and redraws without a transition or native title`, async (t) => {
 		const renderer = new StatusActionRenderer(), action = key("project");
+		t.after(() => renderer.dispose(action.id));
 		renderer.configureProject(action.id, { projectName: "Alpha" });
 		await renderer.renderStatus(action, status);
+		await flush();
 		assert.match(decode(action.images.at(-1)), new RegExp(`>${status}<`));
 		assert.match(decode(action.images.at(-1)), />Alpha</);
 		renderer.configureProject(action.id, { projectName: "Beta", namePosition: "top", statusPosition: "bottom", nameFontSize: 28, statusFontSize: 16 });
@@ -114,6 +117,7 @@ test("two independent project layouts coexist with the unchanged global presenta
 	assert.deepEqual(first.titles, []);
 	assert.deepEqual(second.titles, []);
 	await renderer.renderStatus(global, "ATTENTION");
+	await flush();
 	assert.doesNotMatch(decode(global.images.at(-1)), /<text/);
 	assert.equal(global.titles.at(-1), "ATTENTION");
 });

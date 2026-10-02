@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { StatusActionRenderer, PARTICLE_WAIT_ANIMATION } from "../src/actions/particle-wait-animation.ts";
+import { StatusActionRenderer } from "../src/actions/status-action-renderer.ts";
+import { PARTICLE_WAIT_ANIMATION } from "../src/actions/particle-wait-animation.ts";
 
 for (const resting of ["READY", "ATTENTION", "ERROR", "OFFLINE"]) {
 	test(`project key updates on repeated prompts after ${resting}`, async (t) => {
