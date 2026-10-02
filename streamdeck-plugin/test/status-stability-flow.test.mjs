@@ -33,7 +33,7 @@ test("accidental duplicate setups retire once and replacement owns project/globa
 		}
 	};
 	t.after(() => { globalThis.WebSocket = original; });
-	const context = { location: { directory: "C:\\work\\project", project: { id: "project" } }, permission: { request: { list: async () => ({ data: [] }) } } };
+	const context = { location: { directory: "C:\\work\\project", project: { id: "project" } }, session: { get: async ({ sessionID }) => ({ id: sessionID, projectID: "project" }) }, permission: { request: { list: async () => ({ data: [] }) } } };
 	const old = new OpenCodeBridge(context), replacement = new OpenCodeBridge(context);
 	t.after(() => { old.dispose(); replacement.dispose(); });
 	const project = [], global = [];
@@ -41,25 +41,26 @@ test("accidental duplicate setups retire once and replacement owns project/globa
 	server.subscribe((status) => global.push(status));
 	await old.initialize();
 	sockets[0].open();
-	old.handleEvent({ type: "session.execution.started", data: { sessionID: "old" } });
+	await old.handleEvent({ type: "session.execution.started", data: { sessionID: "old" } });
 	await replacement.initialize();
 	sockets[1].open();
+	await replacement.work;
 	assert.equal(old.superseded, true);
 	assert.equal(server.registry.projectStatus("project"), "READY");
 	const stableProject = project.length, stableGlobal = global.length;
 	for (let i = 0; i < 20; i++) {
 		t.mock.timers.tick(500);
-		old.handleEvent({ type: "session.execution.started", data: { sessionID: "old" } });
-		replacement.handleEvent({ type: "session.idle", data: { sessionID: "current" } });
+		await old.handleEvent({ type: "session.execution.started", data: { sessionID: "old" } });
+		await replacement.handleEvent({ type: "session.idle", data: { sessionID: "current" } });
 	}
 	assert.equal(sockets.length, 2);
 	assert.equal(project.length, stableProject);
 	assert.equal(global.length, stableGlobal);
-	for (let i = 0; i < 5; i++) replacement.handleEvent({ type: "session.status", data: { sessionID: "current", status: { type: "retry" } } });
+	for (let i = 0; i < 5; i++) await replacement.handleEvent({ type: "session.status", data: { sessionID: "current", status: { type: "retry" } } });
 	assert.equal(project.at(-1), "BUSY");
 	assert.equal(global.at(-1), "BUSY");
 	assert.equal(project.length, stableProject + 1);
-	replacement.handleEvent({ type: "session.execution.succeeded", data: { sessionID: "current" } });
+	await replacement.handleEvent({ type: "session.execution.succeeded", data: { sessionID: "current" } });
 	assert.equal(project.at(-1), "READY");
 	assert.equal(global.at(-1), "READY");
 	assert.equal(server.instanceSockets.get(replacement.instanceID), sockets[1].peer);
@@ -69,6 +70,7 @@ test("accidental duplicate setups retire once and replacement owns project/globa
 	assert.equal(project.at(-1), "OFFLINE");
 	t.mock.timers.tick(500);
 	sockets[2].open();
+	await replacement.work;
 	assert.equal(project.at(-1), "READY");
 	assert.equal(sockets.length, 3);
 	assert.equal(old.reconnectTimer, undefined);

@@ -11,6 +11,7 @@ const BRIDGE_URL = "ws://127.0.0.1:20666";
 const WEB_SOCKET_OPEN = 1;
 const INITIAL_RECONNECT_DELAY_MS = 500;
 const MAX_RECONNECT_DELAY_MS = 10_000;
+const LOOKUP_TIMEOUT_MS = 2_000;
 const LOG_FILE = join(homedir(), ".local", "share", "opencode", "log", "streamdeck-status-bridge.log");
 
 const logger = pino(
@@ -56,6 +57,9 @@ export class OpenCodeBridge {
 		this.sessions = new Map();
 		this.permissions = new Map();
 		this.questions = new Map();
+		this.membership = new Set();
+		this.work = Promise.resolve();
+		this.lifetime = new AbortController();
 		this.socket = undefined;
 		this.reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
 		this.reconnectTimer = undefined;
@@ -70,15 +74,106 @@ export class OpenCodeBridge {
 	}
 
 	async captureSnapshot() {
-		logger.debug("Capturing OpenCode status snapshot");
+		return this.enqueue(() => this.refreshPermissions());
+	}
+
+	// Events and recovery share one queue; a failed item never poisons it.
+	enqueue(operation) {
+		this.work = this.work.then(async () => {
+			if (!this.active()) return;
+			await operation();
+		}).catch(() => this.diagnostic("reporting-failed"));
+		return this.work;
+	}
+
+	active(socket) {
+		return !this.disposed && !this.superseded && (!socket || this.socket === socket);
+	}
+
+	diagnostic(reason, sessionID) {
+		logger.warn({ instanceID: this.instanceID, reason, sessionID: typeof sessionID === "string" ? sessionID.slice(0, 128) : undefined }, "OpenCode ownership reporting diagnostic");
+	}
+
+	async bounded(read) {
+		const controller = new AbortController();
+		const abort = () => controller.abort();
+		this.lifetime.signal.addEventListener("abort", abort, { once: true });
+		let timer;
 		try {
-			const { data: permissions } = await this.context.permission.request.list();
-			for (const permission of permissions) {
-				this.permissions.set(permission.id, { sessionID: permission.sessionID });
+			return await Promise.race([
+				Promise.resolve().then(() => read(controller.signal)),
+				new Promise((_, reject) => {
+					controller.signal.addEventListener("abort", () => reject(new Error("Ownership read aborted")), { once: true });
+					timer = setTimeout(abort, LOOKUP_TIMEOUT_MS);
+				}),
+			]);
+		} finally {
+			clearTimeout(timer);
+			this.lifetime.signal.removeEventListener("abort", abort);
+			controller.abort();
+		}
+	}
+
+	async ownership(sessionID, projectID, socket) {
+		if (!this.active(socket) || typeof sessionID !== "string" || !sessionID) return false;
+		if (projectID === undefined) {
+			try {
+				const info = await this.bounded((signal) => this.context.session.get({ sessionID }, { signal }));
+				if (!this.active(socket)) return false;
+				if (info?.id !== sessionID) throw new Error("Invalid session identity");
+				projectID = info.projectID;
+			} catch {
+				if (this.active(socket)) this.diagnostic("session-unresolved", sessionID);
+				return false;
 			}
-		} catch (error) {
-			// A reporting integration must never interfere with OpenCode itself.
-			logger.warn({ err: error }, "Unable to capture OpenCode status snapshot");
+		}
+		if (typeof projectID !== "string" || !projectID) {
+			this.diagnostic("project-unresolved", sessionID);
+			return false;
+		}
+		if (projectID !== this.context.location.project.id) {
+			logger.debug({ instanceID: this.instanceID, reason: "foreign-project", sessionID: sessionID.slice(0, 128) }, "Ignoring foreign OpenCode session");
+			if (this.removeSession(sessionID)) this.ownershipChanged = true;
+			return false;
+		}
+		this.membership.add(sessionID);
+		return true;
+	}
+
+	removeSession(sessionID) {
+		const owned = this.membership.delete(sessionID);
+		if (!owned) return false;
+		this.sessions.delete(sessionID);
+		for (const requests of [this.permissions, this.questions]) {
+			for (const [id, request] of requests) if (request.sessionID === sessionID) requests.delete(id);
+		}
+		return true;
+	}
+
+	async refreshPermissions(socket) {
+		const source = this.context.permission?.request;
+		if (typeof source?.list !== "function") {
+			this.diagnostic("permission-snapshot-unavailable");
+			return;
+		}
+		try {
+			const { data } = await this.bounded((signal) => source.list(undefined, { signal }));
+			if (!this.active(socket)) return;
+			if (!Array.isArray(data)) throw new Error("Invalid permission list");
+			const verified = new Map();
+			for (const permission of data) {
+				if (typeof permission.id === "string" && await this.ownership(permission.sessionID, undefined, socket)) {
+					verified.set(permission.id, { sessionID: permission.sessionID });
+				} else if (this.membership.has(permission.sessionID) && this.permissions.get(permission.id)?.sessionID === permission.sessionID) {
+					// A transient lookup failure excludes publication, not retained
+					// event-observed state. Authoritative foreign ownership removes it.
+					verified.set(permission.id, this.permissions.get(permission.id));
+				}
+				if (!this.active(socket)) return;
+			}
+			this.permissions = verified;
+		} catch {
+			if (this.active(socket)) this.diagnostic("permission-snapshot-failed");
 		}
 	}
 
@@ -98,13 +193,14 @@ export class OpenCodeBridge {
 					projectID: this.context.location.project.id,
 					directory: this.directory,
 				});
-				this.sendSnapshot();
+				void this.sendSnapshot(socket, true);
 			});
 			socket.addEventListener("close", (event) => {
 				if (this.socket !== socket || this.disposed || this.superseded) return;
 				this.socket = undefined;
 				if (event.code === SOURCE_SUPERSEDED_CLOSE_CODE) {
 					this.superseded = true;
+					this.lifetime.abort();
 					if (this.reconnectTimer !== undefined) clearTimeout(this.reconnectTimer);
 					this.reconnectTimer = undefined;
 					logger.info({ instanceID: this.instanceID, directory: this.directory, closeCode: event.code, outcome: "superseded" }, "Stream Deck bridge source retired");
@@ -129,7 +225,10 @@ export class OpenCodeBridge {
 	async consumeEvents(events) {
 		logger.debug("Consuming OpenCode events");
 		try {
-			for await (const event of events) this.handleEvent(event);
+			for await (const event of events) {
+				if (!this.active()) break;
+				await this.handleEvent(event);
+			}
 		} catch (error) {
 			// Status reporting must never disrupt OpenCode when its event stream ends.
 			logger.warn({ err: error }, "OpenCode event stream ended unexpectedly");
@@ -138,7 +237,22 @@ export class OpenCodeBridge {
 
 	/** @param {import("@opencode/client/promise").OpenCodeEvent} event */
 	handleEvent(event) {
-		//logger.debug({ eventType: event.type }, "Handling OpenCode event");
+		return this.enqueue(async () => {
+			this.ownershipChanged = false;
+			await this.applyEvent(event);
+			if (this.active() && this.ownershipChanged) await this.publishSnapshot(this.socket);
+		});
+	}
+
+	async applyEvent(event) {
+		const creations = ["session.execution.started", "session.execution.succeeded", "session.execution.interrupted", "session.status", "session.idle", "session.execution.failed", "session.created", "session.moved", "permission.asked", "question.asked", "form.created"];
+		const data = event.data;
+		if (creations.includes(event.type)) {
+			const sessionID = event.type === "form.created" ? data.form.sessionID : data.sessionID;
+			const projectID = event.type === "session.created" || event.type === "session.moved" ? data.projectID : undefined;
+			if (!await this.ownership(sessionID, projectID)) return;
+			if (!this.active()) return;
+		}
 		switch (event.type) {
 			case "session.execution.started":
 				logger.debug("Marking session as busy");
@@ -177,15 +291,7 @@ export class OpenCodeBridge {
 				this.send({ type: "session.idle", sessionID: event.data.sessionID });
 				break;
 			case "session.deleted":
-				logger.debug("Removing deleted session");
-				this.sessions.delete(event.data.sessionID);
-				for (const [permissionID, permission] of this.permissions) {
-					if (permission.sessionID === event.data.sessionID) this.permissions.delete(permissionID);
-				}
-				for (const [questionID, question] of this.questions) {
-					if (question.sessionID === event.data.sessionID) this.questions.delete(questionID);
-				}
-				this.sendSnapshot();
+				if (this.removeSession(data.sessionID)) this.ownershipChanged = true;
 				break;
 			case "permission.asked":
 				logger.debug("Registering permission request");
@@ -193,6 +299,7 @@ export class OpenCodeBridge {
 				this.send({ type: "permission.asked", permissionID: event.data.id, sessionID: event.data.sessionID });
 				break;
 			case "permission.replied":
+				if (!await this.admitResolution(this.permissions, data.requestID, data.sessionID)) return;
 				logger.debug("Removing answered permission request");
 				this.permissions.delete(event.data.requestID);
 				this.send({ type: "permission.replied", permissionID: event.data.requestID });
@@ -202,7 +309,7 @@ export class OpenCodeBridge {
 				break;
 			case "question.replied":
 			case "question.rejected":
-				this.resolveQuestion(event.data.requestID);
+				if (await this.admitResolution(this.questions, data.requestID, data.sessionID)) this.resolveQuestion(data.requestID);
 				break;
 			// OpenCode 2.0.19 exposes agent questions as forms rather than the
 			// legacy question.* events. Normalize both transports so the bridge
@@ -212,9 +319,15 @@ export class OpenCodeBridge {
 				break;
 			case "form.replied":
 			case "form.cancelled":
-				this.resolveQuestion(event.data.id);
+				if (await this.admitResolution(this.questions, data.id, data.sessionID)) this.resolveQuestion(data.id);
 				break;
 		}
+	}
+
+	async admitResolution(requests, id, sessionID) {
+		const request = requests.get(id);
+		if (!request || (sessionID !== undefined && sessionID !== request.sessionID)) return false;
+		return await this.ownership(request.sessionID) && this.active();
 	}
 
 	/** @param {string} questionID @param {string} sessionID */
@@ -231,23 +344,38 @@ export class OpenCodeBridge {
 		this.send({ type: "question.resolved", questionID });
 	}
 
-	sendSnapshot() {
+	sendSnapshot(socket = this.socket, refresh = false) {
+		return this.enqueue(async () => {
+			if (!this.active(socket)) return;
+			if (refresh) await this.refreshPermissions(socket);
+			if (this.active(socket)) await this.publishSnapshot(socket);
+		});
+	}
+
+	async publishSnapshot(socket) {
+		if (!this.active(socket)) return;
+		const verified = new Set();
+		const ids = new Set([...this.sessions.keys(), ...[...this.permissions.values(), ...this.questions.values()].map(({ sessionID }) => sessionID)]);
+		for (const id of ids) {
+			if (await this.ownership(id, undefined, socket)) verified.add(id);
+			if (!this.active(socket)) return;
+		}
 		logger.debug("Sending Stream Deck status snapshot");
 		this.send({
 			type: "snapshot",
 			sessions: [...this.sessions]
-				.filter(([, status]) => status === BridgeStatus.READY || status === BridgeStatus.BUSY)
+				.filter(([id, status]) => verified.has(id) && (status === BridgeStatus.READY || status === BridgeStatus.BUSY))
 				.map(([sessionID, status]) => ({ sessionID, status })),
-			permissions: [...this.permissions].map(([permissionID, { sessionID }]) => ({ permissionID, sessionID })),
-			questions: [...this.questions].map(([questionID, { sessionID }]) => ({ questionID, sessionID })),
-		});
+			permissions: [...this.permissions].filter(([, { sessionID }]) => verified.has(sessionID)).map(([permissionID, { sessionID }]) => ({ permissionID, sessionID })),
+			questions: [...this.questions].filter(([, { sessionID }]) => verified.has(sessionID)).map(([questionID, { sessionID }]) => ({ questionID, sessionID })),
+		}, socket);
 	}
 
 	/** @param {Record<string, unknown>} message */
-	send(message) {
+	send(message, socket = this.socket) {
 		logger.debug({ messageType: message.type }, "Sending message to Stream Deck bridge");
-		if (this.socket?.readyState !== WEB_SOCKET_OPEN) return;
-		this.socket.send(JSON.stringify({ version: PROTOCOL_VERSION, instanceID: this.instanceID, ...message }));
+		if (!this.active(socket) || socket?.readyState !== WEB_SOCKET_OPEN) return;
+		socket.send(JSON.stringify({ version: PROTOCOL_VERSION, instanceID: this.instanceID, ...message }));
 	}
 
 	scheduleReconnect() {
@@ -263,6 +391,7 @@ export class OpenCodeBridge {
 	dispose() {
 		logger.info({ instanceID: this.instanceID, directory: this.directory }, "Disposing Stream Deck status bridge");
 		this.disposed = true;
+		this.lifetime.abort();
 		if (this.reconnectTimer !== undefined) clearTimeout(this.reconnectTimer);
 		this.reconnectTimer = undefined;
 		const socket = this.socket;
