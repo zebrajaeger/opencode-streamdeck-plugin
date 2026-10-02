@@ -1,19 +1,20 @@
 # AGENTS.md
 
-## Codeänderungen
-bitte achte darauf, dass du in dem opencode läufst, dessen plugin du modifizierst.
-eine codeänderung unterbricht möglicherweise diesen chat. von daher ist es sinnvoll, den code zu kopieren, um ihn zu bearbeiten.
-wenn du damit fertig bist, ersetzen ihn als möglichst atomare aktion.
-es ist NICHT wichtig, dass der chat nicht unterbrochen wird - es ist wichtig, dass der chat nicht unterbrochen wird, während du implementierst.
-der temporäre code kann im projekt 'tmp' ordner liegen. er ist im .gitignore. andernfalls verhindert der virenscanner möglicherweise den zugriff. 
+## Codeänderungen in "opencode-plugin"
+Dies gilt ausschließlich für Änderungen, die du in dem opencode-streamdeck-plugin vornimmst.
+- Bedenke, dass du in dem OpenCode läufst, dessen plugin du modifizierst.
+- Eine Codeänderung unterbricht möglicherweise diesen Chat. Von daher ist es sinnvoll, den Code zu kopieren, um ihn zu bearbeiten.
+- Wenn du mit den Codeanpassungen fertig bis, ersetzen den echten Code in einer möglichst atomare Aktion.
+- Es ist NICHT wichtig, dass der Chat nicht unterbrochen wird - es ist wichtig, dass der Chat nicht unterbrochen wird, während du implementierst.
+- Der temporäre Code kann im Projekt im 'tmp'-Ordner liegen. Er ist im .gitignore. Außerhalb des Projekts verhindert der Virenscanner wahrscheinlich den Zugriff. 
 
 ## Gitenxus
-falls gitnexus nicht mehr aktuell ist, führe `gitnexus analyze` aus.
+- Falls gitnexus nicht mehr aktuell ist, führe `gitnexus analyze` aus.
 
 ## Openspec archive
-bevor du `openspec archive` ausführst,  sync these delta specs into the main OpenSpec specifications before archiving.
-danach ein `gitnexus analyze`, um den index zu aktualisieren.
-danach ein git commit, um die änderungen zu sichern.
+- Bevor du `openspec archive` ausführst, sync these delta specs into the main OpenSpec specifications before archiving.
+- Danach ein `gitnexus analyze`, um den Index zu aktualisieren.
+- Danach ein git commit und git push, um die Änderungen zu sichern.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
