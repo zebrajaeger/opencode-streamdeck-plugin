@@ -23,11 +23,11 @@ The system SHALL render the BUSY wait animation as Stream Deck key images contai
 - **THEN** the system replaces its key image with a subsequent particle-network frame
 
 ### Requirement: Animation stops and status image is restored
-The system SHALL stop a key's particle wait animation when its status changes from `BUSY` to any other status, and SHALL display the new status's presentation after stopping the particle animation. For `ATTENTION`, it SHALL display the attention halo defined by `status-background-animation`; for `READY`, `ERROR`, or `OFFLINE`, it SHALL display the regular static image.
+The system SHALL stop a key's particle wait animation when its status changes from `BUSY` to any other status, and SHALL display the new status's presentation after stopping the particle animation. For `ATTENTION`, it SHALL display the attention halo defined by `status-background-animation`; for `READY`, it SHALL display that capability's green plasma; for `ERROR` or `OFFLINE`, it SHALL display the regular static image.
 
 #### Scenario: Busy status resolves to ready
 - **WHEN** a visible global status key changes from `BUSY` to `READY`
-- **THEN** its particle-network animation stops and the regular `READY` image is displayed
+- **THEN** its particle-network animation stops and the green READY plasma starts
 
 #### Scenario: Busy status escalates
 - **WHEN** a visible global status key changes from `BUSY` to `ATTENTION` or `ERROR`

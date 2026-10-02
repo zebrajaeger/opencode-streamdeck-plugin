@@ -74,10 +74,11 @@ test("starts, stops, and suppresses a queued frame after disposal", async () => 
 	assert.equal(key.images.length, 2);
 });
 
-test("keeps visible BUSY keys independent and restores static images after transitions or disappearance", async () => {
+test("keeps visible BUSY keys independent and selects plasma or static images after transitions", async (t) => {
 	const first = action("first");
 	const second = action("second");
 	const status = new StatusActionRenderer();
+	t.after(async () => { await status.dispose(first.id); await status.dispose(second.id); });
 
 	status.setStatus("BUSY", [first, second]);
 	await flush();
@@ -92,6 +93,7 @@ test("keeps visible BUSY keys independent and restores static images after trans
 	assert.equal(first.titles.at(-1), "READY");
 	assert.match(decodeImage(first.images.at(-1)), /#2E9E5B/);
 	assert.match(decodeImage(second.images.at(-1)), /#2E9E5B/);
+	assert.equal(status.animationCount, 2);
 
 	status.setStatus("ATTENTION", [first, second]);
 	await flush();
@@ -109,26 +111,27 @@ function deferred() {
 	return { promise, resolve, reject };
 }
 
-test("coalesces static and in-flight requests independently per key, but permits explicit refresh", async () => {
+test("coalesces static and in-flight requests independently per key, but permits explicit refresh", async (t) => {
 	const renderer = new StatusActionRenderer();
 	const first = action("one"), second = action("two");
+	t.after(async () => { await renderer.dispose(first.id); await renderer.dispose(second.id); });
 	const title = deferred();
 	first.setTitle = (value) => { first.titles.push(value); return title.promise; };
-	renderer.setStatus("READY", [first]);
+	renderer.setStatus("ERROR", [first]);
 	await flush();
-	for (let i = 0; i < 4; i++) renderer.setStatus("READY", [first, second]);
+	for (let i = 0; i < 4; i++) renderer.setStatus("ERROR", [first, second]);
 	await flush();
-	assert.deepEqual(first.titles, ["READY"]);
+	assert.deepEqual(first.titles, ["ERROR"]);
 	assert.equal(first.images.length, 0);
-	assert.deepEqual(second.titles, ["READY"]);
+	assert.deepEqual(second.titles, ["ERROR"]);
 	assert.equal(second.images.length, 1);
 	title.resolve();
 	await flush();
-	renderer.setStatus("READY", [first, second]);
+	renderer.setStatus("ERROR", [first, second]);
 	await flush();
 	assert.equal(first.images.length, 1);
 	assert.equal(second.images.length, 1);
-	await renderer.renderStatus(first, "READY");
+	await renderer.renderStatus(first, "ERROR");
 	await renderer.renderCurrentStatus(second);
 	assert.equal(first.images.length, 2);
 	assert.equal(second.images.length, 2);
@@ -154,17 +157,20 @@ test("duplicate BUSY requests retain particles and the animation timer while fra
 	assert.equal(renderer.animationCount, 1);
 });
 
-test("static and BUSY reappearance invalidate caches for the same object and reused IDs", async (t) => {
+test("READY and BUSY reappearance invalidate caches for the same object and reused IDs", async (t) => {
 	t.mock.timers.enable({ apis: ["setInterval"] });
 	const renderer = new StatusActionRenderer();
 	const first = action("reused"), another = action("reused"), independent = action("other");
+	t.after(async () => { await renderer.dispose(first.id); await renderer.dispose(another.id); await renderer.dispose(independent.id); });
 	await renderer.renderStatus(first, "READY");
+	await flush();
 	await renderer.dispose(first.id);
 	renderer.setStatus("READY", [first]);
 	await flush();
 	assert.equal(first.images.length, 2);
 	await renderer.dispose(first.id);
 	await renderer.renderStatus(another, "READY");
+	await flush();
 	assert.equal(another.images.length, 1);
 	renderer.setStatus("BUSY", [another, independent]);
 	await flush();
@@ -206,20 +212,21 @@ for (const stage of ["setTitle", "setImage"]) {
 			assert.equal(key.images.filter((image) => decodeImage(image).includes("#E69500")).length, 1);
 		});
 	}
-	test(`failed ${stage} allows retry of the same status`, async () => {
+	test(`failed ${stage} allows retry of the same status`, async (t) => {
 		const renderer = new StatusActionRenderer();
 		const key = action("retry");
+		t.after(() => renderer.dispose(key.id));
 		const original = key[stage].bind(key);
 		let first = true;
 		key[stage] = (value) => {
 			if (first) { first = false; return Promise.reject(new Error("write failed")); }
 			return original(value);
 		};
-		renderer.setStatus("READY", [key]);
+		renderer.setStatus("ERROR", [key]);
 		await flush();
-		renderer.setStatus("READY", [key]);
+		renderer.setStatus("ERROR", [key]);
 		await flush();
-		assert.equal(key.titles.at(-1), "READY");
+		assert.equal(key.titles.at(-1), "ERROR");
 		assert.equal(key.images.length, 1);
 	});
 }
@@ -227,18 +234,19 @@ for (const stage of ["setTitle", "setImage"]) {
 test("disappearance invalidates queued work and serializes reuse behind an already issued write", async (t) => {
 	const renderer = new StatusActionRenderer();
 	const old = action("reused"), fresh = action("reused");
-	t.after(() => renderer.dispose(fresh.id));
+	t.after(async () => { await renderer.dispose(old.id); await renderer.dispose(fresh.id); });
 	const gate = deferred();
 	old.setImage = async (image) => { await gate.promise; old.images.push(image); };
 	renderer.setStatus("READY", [old]);
 	await flush();
-	await renderer.dispose(old.id);
+	const disposed = renderer.dispose(old.id);
 	renderer.setStatus("ERROR", [old]);
-	await renderer.dispose(old.id);
+	const disposedAgain = renderer.dispose(old.id);
 	const appeared = renderer.renderStatus(fresh, "ATTENTION");
 	await flush();
 	assert.deepEqual(fresh.images, []);
 	gate.resolve();
+	await disposed; await disposedAgain;
 	await appeared;
 	await flush();
 	assert.deepEqual(old.titles, ["READY"]);
@@ -293,7 +301,7 @@ test("a failed first animation frame still permits immediate stop and static ren
 	renderer.setStatus("BUSY", [key]);
 	await flush();
 	key.setImage = async (image) => { key.images.push(image); };
-	await renderer.renderStatus(key, "READY");
-	assert.match(decodeImage(key.images.at(-1)), /#2E9E5B/);
+	await renderer.renderStatus(key, "ERROR");
+	assert.match(decodeImage(key.images.at(-1)), /#CF3D3D/);
 	await renderer.dispose(key.id);
 });

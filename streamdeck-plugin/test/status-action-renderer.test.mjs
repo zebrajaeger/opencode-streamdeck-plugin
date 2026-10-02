@@ -36,16 +36,104 @@ test("attention continues for multiple cycles; duplicate reports and explicit re
 	assert.equal(time.starts, 1); assert.equal(time.size, 1);
 });
 
+test("READY composes periodic plasma under stable global and project labels without report restarts", async (t) => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), global = key("global"), project = key("project");
+	t.after(async () => { await renderer.dispose(global.id); await renderer.dispose(project.id); });
+	renderer.configureProject(project.id, { projectName: "Alpha", namePosition: "top", statusPosition: "bottom" });
+	await renderer.renderStatus(global, "READY"); await renderer.renderStatus(project, "READY"); await flush();
+	const initial = [global.images.at(-1), project.images.at(-1)];
+	for (const frame of initial) {
+		const svg = decode(frame);
+		assert.match(svg, /width="144" height="144" viewBox="0 0 144 144"/);
+		assert.match(svg, /#101216/); assert.match(svg, /#2E9E5B/);
+		assert.match(svg, /id="ready-plasma"/);
+	}
+	for (let i = 0; i < 3; i++) {
+		renderer.setStatus("READY", [global, project]);
+		const counts = [global.images.length, project.images.length];
+		await flush(); assert.deepEqual([global.images.length, project.images.length], counts);
+		await time.tick(150);
+		assert.notEqual(global.images.at(-1), initial[0]);
+		assert.notEqual(project.images.at(-1), initial[1]);
+		assert.match(decode(global.images.at(-1)), /fill="#2E9E5B"/);
+		assert.match(decode(project.images.at(-1)), />READY</);
+		assert.match(decode(project.images.at(-1)), />Alpha</);
+		assert.match(decode(project.images.at(-1)), /data-label="name" data-position="top"/);
+		assert.match(decode(project.images.at(-1)), /data-label="status" data-position="bottom"/);
+	}
+	assert.deepEqual(global.titles, ["READY"]); assert.deepEqual(project.titles, []);
+	assert.equal(time.starts, 2); assert.equal(renderer.animationCount, 2);
+});
+
+test("READY refresh and selection retain phase while current project settings compose every later frame", async (t) => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key("project");
+	t.after(() => renderer.dispose(action.id));
+	renderer.configureProject(action.id, { projectName: "Old" });
+	await renderer.renderStatus(action, "READY"); await time.tick(2250);
+	const sample = decode(action.images.at(-1)).match(/<circle cx="6.00" cy="6.00"[^>]+>/)[0];
+	renderer.configureProject(action.id, { projectName: "New", namePosition: "top", statusPosition: "bottom" });
+	await renderer.renderStatus(action, "READY");
+	assert.match(decode(action.images.at(-1)), />New</);
+	assert.ok(decode(action.images.at(-1)).includes(sample));
+	assert.equal(time.starts, 1); assert.equal(time.cancels, 0);
+	await time.tick(150);
+	assert.match(decode(action.images.at(-1)), />New</);
+	assert.doesNotMatch(decode(action.images.at(-1)), />Old</);
+	assert.match(decode(action.images.at(-1)), /data-label="status" data-position="bottom"/);
+	assert.deepEqual(action.titles, []);
+});
+
+test("independent READY keys release resources on repeated hide/show without stopping neighbors", async (t) => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), a = key("a"), b = key("b");
+	t.after(async () => { await renderer.dispose(a.id); await renderer.dispose(b.id); });
+	await renderer.renderStatus(a, "READY"); await renderer.renderStatus(b, "READY");
+	for (let cycle = 0; cycle < 4; cycle++) {
+		await time.tick(150); const prior = b.images.length;
+		await renderer.dispose(a.id); const hidden = a.images.length;
+		assert.equal(time.size, 1); assert.equal(renderer.animationCount, 1);
+		await time.tick(150); assert.equal(a.images.length, hidden); assert.equal(b.images.length, prior + 1);
+		await renderer.renderStatus(a, "READY"); await flush(); assert.equal(a.images.length, hidden + 1);
+		assert.equal(time.size, 2);
+	}
+	await renderer.dispose(a.id); await renderer.dispose(b.id);
+	assert.equal(renderer.animationCount, 0); assert.equal(time.size, 0);
+});
+
+for (const rejected of [false, true]) test(`READY disappearance drains issued write and suppresses queued frames across reused IDs (${rejected ? "rejected" : "resolved"})`, async (t) => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), old = key("same"), fresh = key("same"), gate = deferred();
+	t.after(() => renderer.dispose(fresh.id));
+	old.setImage = async (image) => { await gate.promise; old.images.push(image); };
+	renderer.setStatus("READY", [old]); await flush(); await time.tick(150); await time.tick(150);
+	const disposed = renderer.dispose(old.id);
+	const appeared = renderer.renderStatus(fresh, "ATTENTION"); await flush(); assert.deepEqual(fresh.images, []);
+	if (rejected) gate.reject(new Error("failed")); else gate.resolve();
+	await disposed; await appeared; await flush();
+	assert.equal(old.images.length, rejected ? 0 : 1);
+	assert.match(decode(fresh.images.at(-1)), /attention-halo/);
+	await time.tick(); assert.equal(old.images.length, rejected ? 0 : 1);
+});
+
+test("rejected READY frames recover and still allow static transitions and cleanup", async () => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key("a");
+	const original = action.setImage.bind(action); let calls = 0;
+	action.setImage = (image) => ++calls <= 2 ? Promise.reject(new Error("failed")) : original(image);
+	renderer.setStatus("READY", [action]); await flush(); await time.tick(150); await time.tick(150);
+	assert.equal(action.images.length, 1);
+	await renderer.renderStatus(action, "OFFLINE"); assert.match(decode(action.images.at(-1)), /#5D6470/);
+	await renderer.dispose(action.id); assert.equal(time.size, 0);
+});
+
 test("direct effect switches and static exits release controllers without intermediate images", async () => {
 	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key("a");
-	for (const status of ["BUSY", "ATTENTION", "BUSY", "ATTENTION", "READY", "ATTENTION", "ERROR", "ATTENTION", "OFFLINE"]) {
+	for (const status of ["READY", "BUSY", "READY", "ATTENTION", "READY", "ERROR", "READY", "OFFLINE", "READY", "ATTENTION", "BUSY", "ATTENTION", "ERROR", "ATTENTION", "OFFLINE"]) {
 		const before = action.images.length;
 		await renderer.renderStatus(action, status); await flush();
 		assert.equal(action.images.length, before + 1);
-		const animated = status === "BUSY" || status === "ATTENTION";
+		const animated = status === "BUSY" || status === "ATTENTION" || status === "READY";
 		assert.equal(renderer.animationCount, animated ? 1 : 0);
 		assert.equal(time.size, animated ? 1 : 0);
-		assert.equal(decode(action.images.at(-1)).includes("radialGradient"), status === "ATTENTION");
+		assert.equal(decode(action.images.at(-1)).includes("attention-halo"), status === "ATTENTION");
+		assert.equal(decode(action.images.at(-1)).includes("ready-plasma"), status === "READY");
 		assert.equal(decode(action.images.at(-1)).includes("<line "), status === "BUSY");
 	}
 	assert.equal(time.starts, time.cancels); await renderer.dispose(action.id);
@@ -90,7 +178,7 @@ for (const stage of ["setTitle", "setImage"]) for (const rejected of [false, tru
 		await flush(); assert.equal(action.titles.at(-1), "ATTENTION"); assert.match(decode(action.images.at(-1)), /radialGradient/);
 		await time.tick(); const count = action.images.length; assert.ok(count >= 2);
 		renderer.setStatus("READY", [action]); await flush(); await time.tick();
-		assert.equal(action.images.length, count + 1); assert.match(decode(action.images.at(-1)), /#2E9E5B/);
+		assert.equal(action.images.length, count + 2); assert.match(decode(action.images.at(-1)), /id="ready-plasma"/);
 	});
 }
 

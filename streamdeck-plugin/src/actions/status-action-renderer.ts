@@ -4,6 +4,7 @@ import { projectStatusImage } from "./project-status-image.mjs";
 import { BackgroundAnimation, backgroundImage, type BackgroundAnimationOptions } from "./background-animation.ts";
 import { ParticleWaitAnimation } from "./particle-wait-animation.ts";
 import { AttentionHaloAnimation, ATTENTION_HALO_ANIMATION } from "./attention-halo-animation.ts";
+import { ReadyPlasmaAnimation, READY_PLASMA_ANIMATION } from "./ready-plasma-animation.ts";
 
 export interface StatusKey {
 	readonly id: string;
@@ -66,7 +67,7 @@ export class StatusActionRenderer {
 	get animationCount(): number { return this.animations.size; }
 
 	private compose(action: StatusKey, status: GlobalStatusValue, background: string): string {
-		const image = backgroundImage(background + (status === "ATTENTION" ? statusGlyph(ATTENTION_HALO_ANIMATION.color) : ""));
+		const image = backgroundImage(background + (status === "ATTENTION" ? statusGlyph(ATTENTION_HALO_ANIMATION.color) : status === "READY" ? statusGlyph(READY_PLASMA_ANIMATION.color) : ""));
 		const project = this.projectPresentations.get(action.id);
 		return project ? projectStatusImage(image, status, project) : image;
 	}
@@ -98,9 +99,9 @@ export class StatusActionRenderer {
 			}
 			await stopped;
 			if (!current()) return;
-			if (status === "BUSY" || status === "ATTENTION") {
+			if (status === "BUSY" || status === "ATTENTION" || status === "READY") {
 				if (!animation) {
-					const effect = status === "BUSY" ? new ParticleWaitAnimation(this.options.random) : new AttentionHaloAnimation(this.options.now);
+					const effect = status === "BUSY" ? new ParticleWaitAnimation(this.options.random) : status === "ATTENTION" ? new AttentionHaloAnimation(this.options.now) : new ReadyPlasmaAnimation(this.options.now);
 					const active: ActiveAnimation = { status, controller: new BackgroundAnimation(effect, (background) => {
 						const frameVersion = state.version;
 						return this.write(action,

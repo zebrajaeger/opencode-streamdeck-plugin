@@ -39,7 +39,9 @@ test("admitted permission and question requests keep global/project halos contin
 	t.after(async () => { off.forEach((dispose) => dispose()); for (const action of [a, b, global]) await renderer.dispose(action.id); });
 	const feed = async (type, data) => { await Promise.all(bridges.map((bridge) => bridge.handleEvent({ type, data }))); await flush(); };
 	const svg = (action) => decodeURIComponent(action.images.at(-1).split(",")[1]);
-	await flush(); const readyB = [...b.images];
+	await flush(); const readyB = b.images.length;
+	const phaseB = (image) => decodeURIComponent(image.split(",")[1]).match(/<circle cx="6.00" cy="6.00"[^>]+>/)?.[0];
+	const initialB = phaseB(b.images.at(-1));
 	await feed("session.execution.started", { sessionID: "a" });
 	await feed("permission.asked", { id: "permission", sessionID: "a" });
 	await feed("question.asked", { id: "question", sessionID: "a" });
@@ -53,12 +55,12 @@ test("admitted permission and question requests keep global/project halos contin
 		if (i === 20) await feed("permission.replied", { requestID: "permission", sessionID: "a", reply: "once" });
 		assert.equal(server.registry.projectStatus("A"), "ATTENTION");
 	}
-	assert.deepEqual(b.images, readyB); assert.deepEqual(global.titles, attentionTitles);
+	assert.ok(b.images.length > readyB); assert.match(svg(b), /ready-plasma/); assert.match(svg(b), />Beta</); assert.notEqual(phaseB(b.images.at(-1)), initialB); assert.deepEqual(global.titles, attentionTitles);
 	await feed("question.rejected", { requestID: "question", sessionID: "a" });
 	assert.equal(server.registry.projectStatus("A"), "BUSY"); assert.match(svg(a), /<line /); assert.doesNotMatch(svg(global), /radialGradient/);
-	await feed("session.idle", { sessionID: "a" }); assert.equal(renderer.animationCount, 0);
+	await feed("session.idle", { sessionID: "a" }); assert.equal(renderer.animationCount, 3);
 	await feed("form.created", { form: { id: "form", sessionID: "a" } }); assert.match(svg(global), /radialGradient/);
-	await feed("form.replied", { id: "form", sessionID: "a" }); assert.equal(server.registry.projectStatus("A"), "READY"); assert.equal(renderer.animationCount, 0);
+	await feed("form.replied", { id: "form", sessionID: "a" }); assert.equal(server.registry.projectStatus("A"), "READY"); assert.equal(renderer.animationCount, 3);
 });
 
 test("accidental duplicate setups retire once and replacement owns project/global reports beyond retry intervals", async (t) => {
@@ -137,6 +139,7 @@ test("project subscription lifecycle permits equal-status selection refresh and 
 	server.registry.connect("b", "project-b");
 	const key = { id: "key", titles: [], images: [], async setTitle(title) { this.titles.push(title); }, async setImage(image) { this.images.push(image); } };
 	const renderer = new StatusActionRenderer();
+	t.after(async () => { subscriptions.dispose(key.id); await renderer.dispose(key.id); });
 	let status;
 	const subscriptions = new ProjectStatusSubscriptions((id, value) => { status = value; renderer.setStatus(value, [key]); });
 	subscriptions.setSubscriber((projectID, listener) => server.subscribeProject(projectID, listener));
@@ -146,11 +149,13 @@ test("project subscription lifecycle permits equal-status selection refresh and 
 	const first = key.images.length;
 	subscriptions.update(key.id, "project-b");
 	await renderer.renderStatus(key, status);
+	await flush();
 	assert.equal(key.images.length, first + 1);
 	subscriptions.dispose(key.id);
 	await renderer.dispose(key.id);
 	subscriptions.update(key.id, "project-b");
 	await renderer.renderStatus(key, status);
+	await flush();
 	assert.equal(key.images.length, first + 2);
 	server.registry.apply({ instanceID: "b", type: "session.status", sessionID: "session", status: "busy" });
 	await flush();

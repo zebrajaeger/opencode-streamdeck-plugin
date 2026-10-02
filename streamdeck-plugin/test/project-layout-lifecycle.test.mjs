@@ -30,6 +30,11 @@ test("action lifecycle restores per-key presentation and updates project subscri
 	await flush();
 	assert.match(decode(keys[0].images.at(-1)), />BUSY</);
 	assert.match(decode(keys[1].images.at(-1)), />READY</);
+	const readyBefore = keys[1].images.length;
+	t.mock.timers.tick(150); await flush();
+	assert.ok(keys[1].images.length > readyBefore);
+	assert.match(decode(keys[1].images.at(-1)), /ready-plasma/);
+	assert.match(decode(keys[1].images.at(-1)), />Beta</);
 	await action.onDidReceiveSettings(event(keys[0], { ...settings, projectName: "Renamed", namePosition: "bottom", statusPosition: "top" }));
 	await flush();
 	assert.match(decode(keys[0].images.at(-1)), />Renamed</);
@@ -38,6 +43,11 @@ test("action lifecycle restores per-key presentation and updates project subscri
 	await action.onDidReceiveSettings(event(keys[0], { ...settings, projectID: "project-c" }));
 	assert.equal(listeners.has("project-a"), false);
 	assert.match(decode(keys[0].images.at(-1)), />READY</);
+	const readySelection = keys[0].images.length;
+	t.mock.timers.tick(150); await flush();
+	assert.ok(keys[0].images.length > readySelection);
+	assert.match(decode(keys[0].images.at(-1)), />Alpha</);
+	assert.match(decode(keys[1].images.at(-1)), />Beta</);
 	listeners.get("project-c")("ERROR");
 	await flush();
 	assert.match(decode(keys[0].images.at(-1)), />ERROR</);

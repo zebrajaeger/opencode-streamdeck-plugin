@@ -115,18 +115,21 @@ that do not provide a project ID.
 
 ## Status backgrounds
 
-Both **OpenCode Status** and **OpenCode Project Status** show the existing blue
-particle network during `BUSY` (one frame every 180 ms). During `ATTENTION`, an
-orange radial halo smoothly pulses over a 2.4-second cycle, refreshed every
-100 ms. It continues for the full attention state, including multiple pending
-permission requests or agent questions, until the last outstanding request is
-resolved. If work is still running, particles resume; otherwise the applicable
-static `READY`, `ERROR`, or `OFFLINE` presentation takes over.
+Both **OpenCode Status** and **OpenCode Project Status** show calm green spatial
+plasma waves throughout `READY` (refreshed every 150 ms over a repeating
+12-second cycle). The existing blue particle network runs during `BUSY` (one
+frame every 180 ms). During `ATTENTION`, an orange radial halo smoothly pulses
+over a 2.4-second cycle, refreshed every 100 ms. It continues for the full
+attention state, including multiple pending permission requests or agent
+questions, until the last outstanding request is resolved. If work is still
+running, particles resume; otherwise the applicable green `READY` plasma or
+static `ERROR` or `OFFLINE` presentation takes over.
 
-The attention glyph and status text stay steady throughout the pulse. Project
+The status glyph and text stay steady throughout every background animation. Project
 name/status overlays and their configured layout are composed on every frame;
 the global action retains its native title behavior. Project A's attention
-animates A's key and the global key, not an unaffected ready project B.
+animates A's key and the global key; unaffected ready project B keeps its own
+plasma phase.
 
 Each visible animated key has its own lifecycle. Duplicate reports do not reset
 the animation or rewrite unchanged titles. Presentation refreshes retain the
