@@ -149,16 +149,16 @@ test("project READY selector restores all choices without feedback and preserves
 	const settings = { projectID: "a", projectName: "Alpha", nameFontSize: 23, statusFontSize: 20, namePosition: "top", statusPosition: "bottom", sections: { display: false }, extra: 42 };
 	let { elements, socket, saved } = inspector(settings);
 	const select = elements.get("#ready-background");
-	assert.deepEqual(select.options.map(({ value }) => value), ["plasma", "attention", "particle"]);
+	assert.deepEqual(select.options.map(({ value }) => value), ["plasma", "attention", "particle", "matrix"]);
 	assert.equal(select.value, "plasma"); assert.equal(saved(), undefined);
-	for (const value of ["attention", "particle", "plasma"]) {
+	for (const value of ["attention", "particle", "plasma", "matrix"]) {
 		select.change(value);
 		assert.equal(saved().readyBackground, value);
 		for (const field of Object.keys(settings)) assert.deepEqual(saved()[field], settings[field]);
 	}
-	select.change("attention");
+	select.change("matrix");
 	({ elements, socket, saved } = inspector(saved()));
-	assert.equal(elements.get("#ready-background").value, "attention"); assert.equal(saved(), undefined);
+	assert.equal(elements.get("#ready-background").value, "matrix"); assert.equal(saved(), undefined);
 	socket.message({ event: "didReceiveSettings", payload: { settings: { ...settings, readyBackground: [] } } });
 	assert.equal(elements.get("#ready-background").value, "plasma"); assert.equal(saved(), undefined);
 	elements.get("#ready-background").change("particle");

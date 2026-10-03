@@ -2,6 +2,7 @@ export const READY_BACKGROUNDS = Object.freeze([
 	{ value: "plasma", label: "Plasma" },
 	{ value: "attention", label: "Attention halo" },
 	{ value: "particle", label: "Particles" },
+	{ value: "matrix", label: "Matrix" },
 ]);
 
 export function normalizeReadyBackground(value) {

@@ -272,8 +272,8 @@ test("rejected halo frames recover and still allow transitions and disposal", as
 	await renderer.dispose(action.id); assert.equal(time.size, 0);
 });
 
-const effectPattern = { plasma: /id="ready-plasma"/, attention: /id="attention-halo"/, particle: /<line / };
-for (const mode of ["global", "project"]) for (const selection of ["plasma", "attention", "particle"]) {
+const effectPattern = { plasma: /id="ready-plasma"/, attention: /id="attention-halo"/, particle: /<line /, matrix: /data-matrix=/ };
+for (const mode of ["global", "project"]) for (const selection of ["plasma", "attention", "particle", "matrix"]) {
 	test(`${mode} READY uses ${selection} with the original palette, timing and READY labels`, async (t) => {
 		const time = clock(), renderer = new StatusActionRenderer(time.options), action = key(`${mode}-${selection}`);
 		t.after(() => renderer.dispose(action.id));
@@ -282,12 +282,12 @@ for (const mode of ["global", "project"]) for (const selection of ["plasma", "at
 		await renderer.renderStatus(action, "READY"); await flush();
 		const first = decode(action.images.at(-1));
 		assert.match(first, effectPattern[selection]);
-		assert.match(first, new RegExp(selection === "plasma" ? "#2E9E5B" : selection === "attention" ? "#E69500" : "#5AA8F7"));
+		assert.match(first, new RegExp(selection === "plasma" ? "#2E9E5B" : selection === "attention" ? "#E69500" : selection === "matrix" ? "#9CEFAA" : "#5AA8F7"));
 		assert.match(first, /fill="#2E9E5B"/);
 		assert.match(first, mode === "global" ? />READY</ : />Alpha</);
 		if (mode === "project") assert.match(first, />READY</);
 		const before = action.images.length;
-		await time.tick(selection === "plasma" ? 150 : selection === "attention" ? 100 : 100);
+		await time.tick(selection === "plasma" || selection === "matrix" ? 150 : 100);
 		assert.equal(action.images.length, before + 1);
 		assert.match(decode(action.images.at(-1)), effectPattern[selection]);
 		assert.equal(time.size, 1);
@@ -311,6 +311,84 @@ test("READY selections are per key; live switching does not restart other keys o
 	assert.equal(b.images.length, countB);
 	assert.equal(time.starts, starts + 1); assert.equal(time.size, 2);
 	assert.deepEqual(a.titles, []);
+});
+
+test("Matrix keeps its phase on duplicate READY and layout refresh, independently of other keys", async (t) => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), global = key("global-matrix"), project = key("project-matrix");
+	t.after(async () => { await renderer.dispose(global.id); await renderer.dispose(project.id); });
+	renderer.configureGlobal(global.id, { readyBackground: "matrix", statusFontColor: "#FFFFFF" });
+	renderer.configureProject(project.id, { readyBackground: "matrix", projectName: "Alpha", namePosition: "top", statusPosition: "bottom" });
+	await renderer.renderStatus(global, "READY"); await renderer.renderStatus(project, "READY"); await flush();
+	await time.tick(1500);
+	const previous = decode(global.images.at(-1)).match(/<rect[^]*?(?=<circle)/)?.[0];
+	const count = global.images.length, starts = time.starts, projectCount = project.images.length;
+	renderer.setStatus("READY", [global, project]); await flush();
+	assert.equal(global.images.length, count); assert.equal(project.images.length, projectCount);
+	renderer.configureGlobal(global.id, { readyBackground: "matrix", statusFontColor: "#FF00AA", statusFontFamily: "Georgia" });
+	await renderer.renderCurrentStatus(global);
+	assert.equal(time.starts, starts); assert.equal(time.cancels, 0);
+	assert.equal(decode(global.images.at(-1)).match(/<rect[^]*?(?=<circle)/)?.[0], previous);
+	assert.match(decode(global.images.at(-1)), /font-family="Georgia, sans-serif"/);
+	assert.equal(project.images.length, projectCount);
+	await time.tick(1500);
+	assert.notEqual(decode(global.images.at(-1)).match(/<rect[^]*?(?=<circle)/)?.[0], previous);
+});
+
+test("Matrix composition preserves global typography and project labels at every supported position", async () => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), global = key("global"), project = key("project");
+	renderer.configureGlobal(global.id, { readyBackground: "matrix", statusFontColor: "#FF00AA", statusFontFamily: "Georgia", statusFontSize: 23 });
+	await renderer.renderStatus(global, "READY"); await flush();
+	assert.match(decode(global.images.at(-1)), /data-matrix=/);
+	assert.match(decode(global.images.at(-1)), /data-label="status" data-position="middle"[^]*font-family="Georgia, sans-serif" font-size="23"[^]*fill="#FF00AA">READY/);
+	for (const namePosition of ["top", "middle", "bottom"]) for (const statusPosition of ["top", "middle", "bottom"].filter((position) => position !== namePosition)) {
+		renderer.configureProject(project.id, { readyBackground: "matrix", projectName: "Alpha", namePosition, statusPosition, nameFontFamily: "Georgia", statusFontColor: "#FF00AA" });
+		await renderer.renderStatus(project, "READY"); await flush();
+		const svg = decode(project.images.at(-1));
+		assert.match(svg, new RegExp(`data-label="name" data-position="${namePosition}"[^]*font-family="Georgia, sans-serif"[^]*>Alpha<`));
+		assert.match(svg, new RegExp(`data-label="status" data-position="${statusPosition}"[^]*fill="#FF00AA">READY<`));
+		assert.match(svg, /fill="#2E9E5B"/);
+		assert.match(svg, /data-matrix=/);
+	}
+	await renderer.dispose(global.id); await renderer.dispose(project.id);
+});
+
+for (const rejected of [false, true]) test(`Matrix rapid switching and reused IDs survive ${rejected ? "rejected" : "delayed"} writes`, async () => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), old = key("same"), fresh = key("same"), gate = deferred();
+	renderer.configureGlobal(old.id, { readyBackground: "plasma" });
+	renderer.setStatus("READY", [old]); await flush();
+	const original = old.setImage.bind(old); let blocked = false;
+	old.setImage = async (image) => { if (!blocked) { blocked = true; await gate.promise; } await original(image); };
+	await time.tick(150);
+	renderer.configureGlobal(old.id, { readyBackground: "matrix" }); const matrix = renderer.renderCurrentStatus(old);
+	renderer.configureGlobal(old.id, { readyBackground: "attention" }); const halo = renderer.renderCurrentStatus(old);
+	await flush();
+	if (rejected) gate.reject(new Error("failed")); else gate.resolve();
+	await Promise.allSettled([matrix, halo]); await flush();
+	assert.match(decode(old.images.at(-1)), /attention-halo/);
+	assert.doesNotMatch(decode(old.images.at(-1)), /data-matrix=/);
+	renderer.configureGlobal(old.id, { readyBackground: "matrix" });
+	await renderer.renderCurrentStatus(old); await flush();
+	assert.match(decode(old.images.at(-1)), /data-matrix=/);
+	await renderer.dispose(old.id);
+	const count = old.images.length;
+	renderer.configureGlobal(fresh.id, { readyBackground: "matrix" });
+	await renderer.renderStatus(fresh, "READY"); await flush(); await time.tick(150);
+	assert.equal(old.images.length, count);
+	assert.match(decode(fresh.images.at(-1)), /data-matrix=/);
+	await renderer.dispose(fresh.id);
+	assert.equal(time.size, 0);
+});
+
+for (const status of ["BUSY", "ATTENTION", "ERROR", "OFFLINE"]) test(`Matrix exits READY directly to ${status}`, async () => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key(status);
+	renderer.configureGlobal(action.id, { readyBackground: "matrix" });
+	await renderer.renderStatus(action, "READY"); await flush();
+	const count = action.images.length;
+	await renderer.renderStatus(action, status); await flush();
+	assert.equal(action.images.length, count + 1);
+	assert.doesNotMatch(decode(action.images.at(-1)), /data-matrix=/);
+	assert.match(decode(action.images.at(-1)), new RegExp(`>${status === "ATTENTION" ? "ATT" : status === "ERROR" ? "ERR" : status === "OFFLINE" ? "OFFLINE" : "BU"}`));
+	await renderer.dispose(action.id); assert.equal(time.size, 0);
 });
 
 test("equivalent READY choices and refreshes retain phase; non-READY changes apply on next READY", async (t) => {
@@ -375,7 +453,7 @@ test("invalid READY settings normalize equally and disposal clears the action ID
 	assert.equal(time.size, 1);
 });
 
-for (const selection of ["plasma", "attention", "particle"]) test(`${selection} READY survives failed frames and releases on static exit and disappearance`, async () => {
+for (const selection of ["plasma", "attention", "particle", "matrix"]) test(`${selection} READY survives failed frames and releases on static exit and disappearance`, async () => {
 	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key("a"), neighbor = key("b");
 	renderer.configureGlobal(action.id, { readyBackground: selection });
 	renderer.configureProject(neighbor.id, { readyBackground: "particle", projectName: "Neighbor" });
