@@ -57,7 +57,7 @@ Generations + Trails SHALL use states 0 through 4, with 0 off and only 4 active 
 - **AND** states 1 through 3 neither count as active neighbors nor cause premature rebirth of a decaying cell
 
 ### Requirement: Local recovery from cellular stagnation
-Cellular backgrounds SHALL recover without a visible whole-grid reinitialization. If the entire grid is off, or Day & Night is entirely active, the next simulation advance SHALL insert localized rule-appropriate seed patches. If at most five of the 576 cells change state in each of 100 consecutive simulation generations, a localized recovery SHALL occur on the hundredth such generation. Each recovery SHALL affect one to three patches of at most 3×3 cells each and preserve every cell outside those patches. Dense Day & Night recovery SHALL permit local clearing as well as activation to create boundaries. Normal motion SHALL not trigger recovery. Detection SHALL count simulation generations, not delivered frames or presentation refreshes.
+Cellular backgrounds SHALL recover without a visible whole-grid reinitialization. If the entire grid is off, or Day & Night is entirely active, the next simulation advance SHALL insert localized rule-appropriate seed patches. If at most five of the 576 cells change state in each of 100 consecutive simulation generations, a localized recovery SHALL occur on the hundredth such generation. For Brian's Brain and Generations + Trails, if at most eight cells are active (state 1 or state 4 respectively) in each of 100 consecutive simulation generations, a localized recovery SHALL also occur on the hundredth such generation, even when more than five cells change per generation. The two consecutive counters SHALL be independent; a generation that exceeds a counter's threshold SHALL reset that counter, and recovery SHALL reset both. Each recovery SHALL affect one to three patches of at most 3×3 cells each and preserve every cell outside those patches. Dense Day & Night recovery SHALL permit local clearing as well as activation to create boundaries. Normal motion with more than eight active cells SHALL not trigger sparse-pattern recovery. Detection SHALL count simulation generations, not delivered frames or presentation refreshes.
 
 #### Scenario: Extinction or saturation
 - **WHEN** the grid becomes entirely off or Day & Night becomes entirely active
@@ -68,9 +68,14 @@ Cellular backgrounds SHALL recover without a visible whole-grid reinitialization
 - **THEN** recovery occurs on the hundredth generation and changes no more than 27 cell positions
 - **AND** cells outside the selected patches and the current presentation remain unchanged
 
+#### Scenario: A moving but sparse oscillator
+- **WHEN** Brian's Brain or Generations + Trails has at most eight active cells for 100 consecutive generations while its moving pattern changes more than five cells per generation
+- **THEN** localized recovery occurs on the hundredth generation, changing only cells within one to three 3×3 patches
+- **AND** snapshots and label refreshes neither increment nor reset the sparse-pattern counter
+
 #### Scenario: Active evolution and refreshes
-- **WHEN** a generation changes more than five cells, or the presentation is refreshed without advancing the simulation
-- **THEN** active evolution resets the consecutive low-activity count and a presentation refresh does not advance or trigger recovery
+- **WHEN** a generation changes more than five cells, has more than eight active cells, or the presentation is refreshed without advancing the simulation
+- **THEN** each exceeded threshold resets only its corresponding consecutive counter, and a presentation refresh does not advance or trigger recovery
 
 ### Requirement: Stable independent cellular lifecycle
 Every visible key using a cellular READY background SHALL own independent simulation state. Duplicate READY reports, unchanged background selections, and typography/layout refreshes SHALL NOT reinitialize its grid or advance it merely to redraw. Live background changes and status transitions SHALL follow the existing serialized switching contract: only the changed key restarts, latest selection wins, superseded queued frames cannot overwrite the new presentation, and failures do not block later frames or cleanup. Disappearance SHALL release its resources and suppress queued and newly scheduled writes; already issued writes are allowed to settle. Reappearance SHALL immediately display the current selection without waiting for a status report.

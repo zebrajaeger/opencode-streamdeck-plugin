@@ -38,7 +38,7 @@ Alternative: elapsed-time catch-up. Rejected because cellular generations are di
 
 ### 3. Exact rules with a bounded low-activity escape hatch
 
-Use the normative rules from the delta unchanged. Compare old/new states to count changed cells before any intervention. A count of at most five increments a consecutive low-activity counter; more than five resets it. Recover at 100 low-activity generations or immediately upon extinction/full Day & Night saturation; reset the counter afterward. This detects static and nearly static boards without expensive history storage. Ordinary oscillators with substantial visible change are allowed.
+Use the normative rules from the delta unchanged. Compare old/new states to count changed cells before any intervention. A count of at most five increments a consecutive low-activity counter; more than five resets it. For Brian's Brain and Generations + Trails, independently count active cells (state 1 or 4) after each ordinary evolution and before intervention: at most eight increments a consecutive sparse-pattern counter; more than eight resets it. Recover when either counter reaches 100 generations or immediately upon extinction/full Day & Night saturation; reset both counters afterward. This catches small moving oscillators that change more than five cells forever while retaining the original low-change trigger. Ordinary oscillators with more than eight active cells and substantial visible change are allowed.
 
 Choose one to three random patch centers, wrapping their 3×3 coordinates. Use finite, mode-specific templates containing adjacent active cells for sparks/trails. Day & Night templates include both active and off cells so a saturated grid can develop a boundary. Apply templates after ordinary evolution, changing only those at most 27 cell positions. Allow overlaps rather than retrying for uniqueness. Retain all outside cells and the current controller. Test recovery separately from pure rule stepping so interventions cannot obscure rule correctness.
 
@@ -62,7 +62,7 @@ Alternative: shoehorn automata into BUSY particles or ATTENTION halo. Rejected b
 
 ### 6. Verification at existing seams
 
-Add `cellular-automaton.test.mjs` for exhaustive birth/survival/decay and wrapped-edge fixtures, simultaneous update, all-zero/all-active boards, exact low-activity thresholds, outside-patch preservation, and bounded constant-random recovery. Add `cellular-background-animation.test.mjs` for deterministic initialization, read-only snapshots, palettes/trail intensity, fixed intervals, finite/bounded SVG, and long-running bounded storage.
+Add `cellular-automaton.test.mjs` for exhaustive birth/survival/decay and wrapped-edge fixtures, simultaneous update, all-zero/all-active boards, exact low-activity and sparse-pattern thresholds (including a moving small oscillator with more than five changed cells), independent counter resets, outside-patch preservation, and bounded constant-random recovery. Add `cellular-background-animation.test.mjs` for deterministic initialization, read-only snapshots, palettes/trail intensity, fixed intervals, finite/bounded SVG, and long-running bounded storage.
 
 Extend the prerequisite's normalization/choice tests and both inspector tests for all three values, restoration without write feedback, and preservation of Matrix if present and font/layout/project settings. Extend `status-action-renderer.test.mjs` with mixed global/project cellular keys, repeated READY, same-selection updates, typography/layout refresh, non-READY selection changes, rapid switches against deferred/rejected writes, disappearance, and reused action IDs. Run the entire Stream Deck suite and Rollup build. Record native-size visual evidence for all modes and settings combinations, using real inspector events in the browser and Qt-compatible rasterization for key frames.
 
@@ -70,7 +70,7 @@ Extend the prerequisite's normalization/choice tests and both inspector tests fo
 
 - [The prerequisite is not implemented] → Application is gated on its verified infrastructure; do not silently implement it as part of this change.
 - [Selector specs overlap the prerequisite and Matrix] → Reconcile the closed-list wording explicitly and merge supported choices additively during later sync.
-- [Dense or periodic boards look static] → Bound low-activity detection and use local clearing/activation; document that visibly moving oscillators need not be broken.
+- [Sparse moving patterns dominate the key] → Detect at most eight active cells for 100 generations in the spark/trail modes independently of changed-cell count, then seed locally. Larger moving oscillators remain allowed.
 - [Bright cells compete with labels on 72×72] → Low opacity, stable overlays, native-size motion review, and fixed-palette tuning within the specified appearance.
 - [Shared renderer changes affect both actions] → Preserve its delivery guards and run mixed-key race tests and the full suite.
 - [Working-tree font/layout work overlaps integration] → Make narrow additive changes and preserve existing settings and tests.

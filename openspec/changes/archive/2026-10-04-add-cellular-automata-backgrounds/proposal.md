@@ -7,7 +7,7 @@ Small cellular automata can provide lively sparks, calm organic motion, and fadi
 - Add Brian's Brain, Day & Night, and Generations + Trails as independently selectable READY backgrounds for both global and project keys.
 - Use a 24×24 simulation grid, displayed as 3×3 physical pixels per cell on a 72×72 key, with a dark base and subdued palettes that preserve label readability.
 - Implement Brian's Brain's three-state sparks, Day & Night's `B3678/S34678` organic structures, and five-state Generations with birth at two active neighbors and decaying trails.
-- Recover from extinction or sustained low activity through small local seed injections, not visible whole-grid resets.
+- Recover from extinction, sustained low activity, or a prolonged sparse moving pattern (at most eight active cells) through small local seed injections, not visible whole-grid resets.
 - Preserve Plasma as default, existing selections and settings, READY labels, and the prerequisite's independent, serialized lifecycle and live switching behavior.
 - Exclude Seeds, HighLife, Life without Death, adjustable rules/speed/palettes, and selection for non-READY statuses.
 

@@ -272,8 +272,8 @@ test("rejected halo frames recover and still allow transitions and disposal", as
 	await renderer.dispose(action.id); assert.equal(time.size, 0);
 });
 
-const effectPattern = { plasma: /id="ready-plasma"/, attention: /id="attention-halo"/, particle: /<line /, matrix: /data-matrix=/ };
-for (const mode of ["global", "project"]) for (const selection of ["plasma", "attention", "particle", "matrix"]) {
+const effectPattern = { plasma: /id="ready-plasma"/, attention: /id="attention-halo"/, particle: /<line /, matrix: /data-matrix=/, "brians-brain": /data-cell-state=/, "day-night": /data-cell-state=/, "generations-trails": /data-cell-state=/ };
+for (const mode of ["global", "project"]) for (const selection of Object.keys(effectPattern)) {
 	test(`${mode} READY uses ${selection} with the original palette, timing and READY labels`, async (t) => {
 		const time = clock(), renderer = new StatusActionRenderer(time.options), action = key(`${mode}-${selection}`);
 		t.after(() => renderer.dispose(action.id));
@@ -282,7 +282,7 @@ for (const mode of ["global", "project"]) for (const selection of ["plasma", "at
 		await renderer.renderStatus(action, "READY"); await flush();
 		const first = decode(action.images.at(-1));
 		assert.match(first, effectPattern[selection]);
-		assert.match(first, new RegExp(selection === "plasma" ? "#2E9E5B" : selection === "attention" ? "#E69500" : selection === "matrix" ? "#9CEFAA" : "#5AA8F7"));
+		assert.match(first, new RegExp(selection === "plasma" ? "#2E9E5B" : selection === "attention" ? "#E69500" : selection === "matrix" ? "#9CEFAA" : selection === "brians-brain" ? "#74CFE5" : selection === "day-night" ? "#70C6A4" : selection === "generations-trails" ? "#78D0E6" : "#5AA8F7"));
 		assert.match(first, /fill="#2E9E5B"/);
 		assert.match(first, mode === "global" ? />READY</ : />Alpha</);
 		if (mode === "project") assert.match(first, />READY</);
@@ -453,7 +453,7 @@ test("invalid READY settings normalize equally and disposal clears the action ID
 	assert.equal(time.size, 1);
 });
 
-for (const selection of ["plasma", "attention", "particle", "matrix"]) test(`${selection} READY survives failed frames and releases on static exit and disappearance`, async () => {
+for (const selection of Object.keys(effectPattern)) test(`${selection} READY survives failed frames and releases on static exit and disappearance`, async () => {
 	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key("a"), neighbor = key("b");
 	renderer.configureGlobal(action.id, { readyBackground: selection });
 	renderer.configureProject(neighbor.id, { readyBackground: "particle", projectName: "Neighbor" });
@@ -491,4 +491,70 @@ for (const selection of ["particle", "attention"]) test(`status transitions shar
 	}
 	assert.equal(time.starts, 4); assert.equal(time.cancels, 3);
 	await renderer.dispose(action.id);
+});
+
+test("mixed cellular READY keys retain separate grids through duplicate reports and overlay refreshes", async () => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), global = key("cells-global"), project = key("cells-project");
+	renderer.configureGlobal(global.id, { readyBackground: "brians-brain", statusFontColor: "#FFFFFF" });
+	renderer.configureProject(project.id, { readyBackground: "generations-trails", projectName: "Old", namePosition: "top", statusPosition: "bottom" });
+	await renderer.renderStatus(global, "READY"); await renderer.renderStatus(project, "READY"); await flush();
+	await time.tick(150);
+	const field = (action) => decode(action.images.at(-1)).split('<circle cx="72"')[0];
+	const prior = field(project), globalPrior = field(global), starts = time.starts, count = project.images.length;
+	renderer.setStatus("READY", [global, project]); await flush();
+	assert.equal(project.images.length, count);
+	renderer.configureProject(project.id, { readyBackground: "generations-trails", projectName: "New", namePosition: "bottom", statusPosition: "top", nameFontFamily: "Georgia" });
+	await renderer.renderCurrentStatus(project);
+	assert.equal(field(project), prior);
+	assert.equal(field(global), globalPrior);
+	assert.match(decode(project.images.at(-1)), /data-label="name" data-position="bottom"[^]*>New</);
+	assert.equal(time.starts, starts); assert.equal(time.cancels, 0);
+	await time.tick(150);
+	assert.notEqual(field(project), prior);
+	assert.notEqual(field(global), globalPrior);
+	await renderer.dispose(project.id);
+	const replacement = key(project.id);
+	renderer.configureProject(replacement.id, { readyBackground: "day-night", projectName: "Return" });
+	await renderer.renderStatus(replacement, "READY"); await flush();
+	assert.match(decode(replacement.images.at(-1)), /#70C6A4/);
+	assert.match(decode(replacement.images.at(-1)), />Return</);
+	await renderer.dispose(global.id); await renderer.dispose(replacement.id);
+	assert.equal(time.size, 0);
+});
+
+for (const status of ["BUSY", "ATTENTION", "ERROR", "OFFLINE"]) test(`cellular choice set during ${status} waits for READY without restarting the current animation`, async () => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), action = key(`outside-${status}`);
+	renderer.configureGlobal(action.id, { readyBackground: "brians-brain" });
+	await renderer.renderStatus(action, status); await flush();
+	const before = decode(action.images.at(-1)), starts = time.starts;
+	renderer.configureGlobal(action.id, { readyBackground: "day-night" });
+	await renderer.renderStatus(action, status);
+	assert.equal(time.starts, starts);
+	assert.equal(decode(action.images.at(-1)).includes("data-cell-state="), false);
+	if (status === "ERROR" || status === "OFFLINE") assert.equal(decode(action.images.at(-1)), before);
+	await renderer.renderStatus(action, "READY"); await flush();
+	assert.match(decode(action.images.at(-1)), /#70C6A4/);
+	await renderer.dispose(action.id); assert.equal(time.size, 0);
+});
+
+for (const rejected of [false, true]) test(`cellular switches and reused ID serialize ${rejected ? "rejected" : "deferred"} writes`, async () => {
+	const time = clock(), renderer = new StatusActionRenderer(time.options), old = key("cell-reuse"), fresh = key("cell-reuse"), gate = deferred();
+	renderer.configureGlobal(old.id, { readyBackground: "brians-brain" });
+	await renderer.renderStatus(old, "READY");
+	const original = old.setImage.bind(old); let blocked = false;
+	old.setImage = async (image) => { if (!blocked) { blocked = true; await gate.promise; } await original(image); };
+	await time.tick(150); assert.equal(blocked, true);
+	renderer.configureGlobal(old.id, { readyBackground: "day-night" }); const intermediate = renderer.renderCurrentStatus(old);
+	renderer.configureGlobal(old.id, { readyBackground: "generations-trails" }); const latest = renderer.renderCurrentStatus(old);
+	const disposed = renderer.dispose(old.id);
+	renderer.configureProject(fresh.id, { readyBackground: "generations-trails", projectName: "Fresh" });
+	const appeared = renderer.renderStatus(fresh, "READY");
+	await flush(); assert.deepEqual(fresh.images, []);
+	if (rejected) gate.reject(new Error("failed")); else gate.resolve();
+	await Promise.allSettled([intermediate, latest, disposed, appeared]); await flush();
+	assert.equal(old.images.length, rejected ? 0 : 1);
+	assert.match(decode(fresh.images.at(-1)), /#78D0E6/);
+	assert.match(decode(fresh.images.at(-1)), />Fresh</);
+	assert.equal(time.size, 1);
+	await renderer.dispose(fresh.id); assert.equal(time.size, 0);
 });

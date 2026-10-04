@@ -90,16 +90,16 @@ test("global status font accepts the new 10 px minimum and restores it", () => {
 test("global READY selector restores, normalizes, and preserves font, sections and unknown settings", () => {
 	let { elements, socket, saved } = inspector({ statusFontSize: 23, sections: { display: false }, extra: 7 });
 	const select = elements.get("#ready-background");
-	assert.deepEqual(select.options.map(({ value }) => value), ["plasma", "attention", "particle", "matrix"]);
+	assert.deepEqual(select.options.map(({ value }) => value), ["plasma", "attention", "particle", "matrix", "brians-brain", "day-night", "generations-trails"]);
 	assert.equal(select.value, "plasma"); assert.equal(saved(), undefined);
-	for (const value of ["attention", "particle", "plasma", "matrix"]) {
+	for (const value of ["attention", "particle", "plasma", "matrix", "brians-brain", "day-night", "generations-trails"]) {
 		select.value = value; select.listeners.change();
 		assert.equal(saved().readyBackground, value);
 		assert.equal(saved().statusFontSize, 23); assert.deepEqual(saved().sections, { display: false }); assert.equal(saved().extra, 7);
 	}
-	select.value = "matrix"; select.listeners.change();
+	select.value = "generations-trails"; select.listeners.change();
 	({ elements, socket, saved } = inspector(saved()));
-	assert.equal(elements.get("#ready-background").value, "matrix"); assert.equal(saved(), undefined);
+	assert.equal(elements.get("#ready-background").value, "generations-trails"); assert.equal(saved(), undefined);
 	socket.message({ event: "didReceiveSettings", payload: { settings: { readyBackground: "invalid", statusFontSize: 28 } } });
 	assert.equal(elements.get("#ready-background").value, "plasma"); assert.equal(saved(), undefined);
 });

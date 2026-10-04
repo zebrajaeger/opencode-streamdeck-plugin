@@ -6,6 +6,7 @@ import { ParticleWaitAnimation } from "./particle-wait-animation.ts";
 import { AttentionHaloAnimation, ATTENTION_HALO_ANIMATION } from "./attention-halo-animation.ts";
 import { ReadyPlasmaAnimation, READY_PLASMA_ANIMATION } from "./ready-plasma-animation.ts";
 import { MatrixBackgroundAnimation } from "./matrix-background-animation.ts";
+import { CellularBackgroundAnimation } from "./cellular-background-animation.ts";
 import { normalizeReadyBackground, type ReadyBackground } from "../../de.lars-brandt.opencode.sdPlugin/property-inspector/ready-background.mjs";
 
 export interface StatusKey {
@@ -119,7 +120,7 @@ export class StatusActionRenderer {
 			if (!current()) return;
 			if (effect) {
 				if (!animation) {
-					const renderer = effect === "particle" ? new ParticleWaitAnimation(this.options.random) : effect === "attention" ? new AttentionHaloAnimation(this.options.now) : effect === "matrix" ? new MatrixBackgroundAnimation(this.options.now) : new ReadyPlasmaAnimation(this.options.now);
+					const renderer = effect === "particle" ? new ParticleWaitAnimation(this.options.random) : effect === "attention" ? new AttentionHaloAnimation(this.options.now) : effect === "matrix" ? new MatrixBackgroundAnimation(this.options.now) : effect === "brians-brain" || effect === "day-night" || effect === "generations-trails" ? new CellularBackgroundAnimation(effect, this.options.random) : new ReadyPlasmaAnimation(this.options.now);
 					const active: ActiveAnimation = { status, effect, controller: new BackgroundAnimation(renderer, (background) => {
 						const frameVersion = state.version;
 						return this.write(action,
