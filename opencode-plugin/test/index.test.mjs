@@ -128,7 +128,7 @@ for (const [type, extra] of creationEvents) {
 				assert.equal(bridge.sessions.size + bridge.permissions.size + bridge.questions.size, 0);
 			}
 		}
-		assert.equal(calls, type === "session.created" ? 1 : 3);
+		assert.equal(calls, type === "session.created" ? 2 : 3);
 	});
 }
 

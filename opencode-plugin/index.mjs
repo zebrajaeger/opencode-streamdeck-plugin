@@ -116,12 +116,17 @@ export class OpenCodeBridge {
 
 	async ownership(sessionID, projectID, socket) {
 		if (!this.active(socket) || typeof sessionID !== "string" || !sessionID) return false;
-		if (projectID === undefined) {
+		if (projectID === undefined || projectID !== this.context.location.project.id) {
 			try {
 				const info = await this.bounded((signal) => this.context.session.get({ sessionID }, { signal }));
 				if (!this.active(socket)) return false;
 				if (info?.id !== sessionID) throw new Error("Invalid session identity");
+				if (projectID !== undefined && projectID !== info.projectID) throw new Error("Inconsistent project identity");
 				projectID = info.projectID;
+				// Recreated projects can have two IDs for one directory. Trust only
+				// the directory returned by session.get, never the event location.
+				if (typeof projectID === "string" && projectID && projectID !== this.context.location.project.id &&
+					info.location?.directory === this.directory) projectID = this.context.location.project.id;
 			} catch {
 				if (this.active(socket)) this.diagnostic("session-unresolved", sessionID);
 				return false;

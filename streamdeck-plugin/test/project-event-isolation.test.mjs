@@ -86,3 +86,59 @@ test("two producers consume one mixed stream without mislabeling activity, atten
 	await feed("session.idle", { sessionID: "a" });
 	statuses(["READY", "READY", "READY"]);
 });
+
+test("recreated project ID at the same directory continues to show BUSY on its existing key", async (t) => {
+	const server = new StatusBridgeServer({ port: 0 });
+	await once(server.server, "listening");
+	t.after(() => server.close());
+	const original = globalThis.WebSocket;
+	globalThis.WebSocket = class {
+		readyState = 0;
+		listeners = new Map();
+		constructor() { this.peer = { close: (code) => this.close(code) }; }
+		addEventListener(type, listener) { this.listeners.set(type, listener); }
+		open() { this.readyState = 1; this.listeners.get("open")(); }
+		send(payload) { server.handleMessage(this.peer, payload); }
+		close(code = 1000) { this.readyState = 3; server.handleClose(this.peer); this.listeners.get("close")({ code }); }
+	};
+	t.after(() => { globalThis.WebSocket = original; });
+	const bridge = new OpenCodeBridge({
+		location: { directory: "C:\\work\\recreated", project: { id: "old-project" } },
+		session: { get: async ({ sessionID }) => ({ id: sessionID, projectID: "new-project", location: { directory: "C:\\work\\recreated" } }) },
+		permission: {},
+	});
+	t.after(() => bridge.dispose());
+	await bridge.initialize(); bridge.socket.open(); await bridge.work;
+	assert.equal(server.registry.projectStatus("old-project"), "READY");
+	await bridge.handleEvent({ type: "session.execution.started", data: { sessionID: "new-session" } });
+	assert.equal(server.registry.projectStatus("old-project"), "BUSY");
+	assert.equal(server.registry.status, "BUSY");
+	await bridge.sendSnapshot();
+	assert.equal(server.registry.projectStatus("old-project"), "BUSY");
+	await bridge.handleEvent({ type: "session.idle", data: { sessionID: "new-session" } });
+	assert.equal(server.registry.projectStatus("old-project"), "READY");
+});
+
+test("a different directory is never admitted through a duplicate project ID or untrusted event location", async (t) => {
+	const original = globalThis.WebSocket;
+	globalThis.WebSocket = class {
+		readyState = 0;
+		listeners = new Map();
+		messages = [];
+		addEventListener(type, listener) { this.listeners.set(type, listener); }
+		open() { this.readyState = 1; this.listeners.get("open")(); }
+		send(payload) { this.messages.push(JSON.parse(payload)); }
+		close() { this.readyState = 3; this.listeners.get("close")?.({ code: 1000 }); }
+	};
+	t.after(() => { globalThis.WebSocket = original; });
+	const bridge = new OpenCodeBridge({
+		location: { directory: "C:\\work\\recreated", project: { id: "old-project" } },
+		session: { get: async ({ sessionID }) => ({ id: sessionID, projectID: "new-project", location: { directory: "C:\\work\\other" } }) },
+		permission: {},
+	});
+	t.after(() => bridge.dispose());
+	await bridge.initialize(); bridge.socket.open(); await bridge.work;
+	await bridge.handleEvent({ type: "session.execution.started", data: { sessionID: "foreign" }, location: { directory: "C:\\work\\recreated" } });
+	assert.equal(bridge.sessions.size, 0);
+	assert.equal(bridge.socket.messages.some(({ type }) => type === "session.status"), false);
+});
